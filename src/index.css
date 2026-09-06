@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-canvas: #090a0c;
+    --bg-surface: #111317;
+    --bg-surface-raised: #181b22;
+    --border-hairline: rgba(255, 255, 255, 0.08);
+    --border-accent: #ff453a;
+    --accent-signal: #ff453a;
+    --accent-amber: #f59e0b;
+    --text-pure: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+  }
+
+  body {
+    background-color: #090a0c;
+    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Minimalist Titanium Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090a0c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e222b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff453a;
+}
+
+/* Subtle Physical Pulse Animation */
+@keyframes haptic-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.animate-haptic-pulse {
+  animation: haptic-pulse 1.8s ease-in-out infinite;
+}
