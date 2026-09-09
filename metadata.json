@@ -1,6 +1,6 @@
 {
-  "name": "Arambh Health - Emergency Hotline & Case Management",
-  "description": "Zero-delay Fast Admit emergency hotline with voice-to-fill application, nearest hospital receptionist AI, real-time ER bed vacancy routing, and autonomous fall motion detection.",
+  "name": "Arambh Health - Emergency Fast Admit & Offline SMS",
+  "description": "Zero-delay Fast Admit emergency hotline with voice triage, offline SMS emergency dispatch protocol, AI receptionist, and real-time ER trauma bed vacancies.",
   "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

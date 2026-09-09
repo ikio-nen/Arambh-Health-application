@@ -5,6 +5,7 @@ import { NearestHospitalsView } from './components/NearestHospitalsView';
 import { FallMotionGuard } from './components/FallMotionGuard';
 import { EmergencyReceptionistAgent } from './components/EmergencyReceptionistAgent';
 import { EmergencyQuickLogin } from './components/EmergencyQuickLogin';
+import { SIHShowcaseView } from './components/SIHShowcaseView';
 
 import { EmergencyHotline } from './components/EmergencyHotline';
 import { HospitalDashboard } from './components/HospitalDashboard';
@@ -229,7 +230,16 @@ export default function App() {
           />
         )}
 
-        {/* 5. LEGACY SOS HOTLINE INTAKE */}
+        {/* 5. SIH SHOWCASE: OFFLINE SMS PROTOCOL & ANDROID APK INSTALLATION */}
+        {activeView === 'sih_showcase' && (
+          <SIHShowcaseView
+            isOfflineMode={isOfflineMode}
+            onToggleOfflineMode={() => setIsOfflineMode(!isOfflineMode)}
+            onOpenFastAdmit={() => setActiveView('fast_admit')}
+          />
+        )}
+
+        {/* 6. LEGACY SOS HOTLINE INTAKE */}
         {activeView === 'hotline' && (
           <EmergencyHotline
             isOfflineMode={isOfflineMode}

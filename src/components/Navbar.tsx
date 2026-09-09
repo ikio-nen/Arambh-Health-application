@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  Zap, Building2, ShieldAlert, Bot, Stethoscope, ChevronDown, User, Menu, X, Smartphone
+  Zap, Building2, ShieldAlert, Bot, Stethoscope, ChevronDown, User, Menu, X, Smartphone, MessageSquare
 } from 'lucide-react';
 import { User as SystemUser, UserRole } from '../types';
 import { VibrationService } from '../services/vibrationService';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   currentUser: SystemUser | null;
@@ -129,7 +130,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Receptionist Desk</span>
             </button>
 
-            {/* 5. CLINICAL DROPDOWN */}
+            {/* 5. SIH SHOWCASE & OFFLINE SMS PROTOCOL */}
+            <button
+              id="nav-btn-sih-showcase"
+              onClick={() => handleSelectNav('sih_showcase')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center space-x-1.5 cursor-pointer ${
+                activeView === 'sih_showcase' 
+                  ? 'bg-white text-black font-semibold' 
+                  : 'text-amber-400 hover:text-white hover:bg-[#14161a] border border-amber-500/30'
+              }`}
+            >
+              <MessageSquare className={`w-3.5 h-3.5 ${activeView === 'sih_showcase' ? 'text-black' : 'text-amber-400'}`} />
+              <span>SIH Offline SMS</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+            </button>
+
+            {/* 6. CLINICAL DROPDOWN */}
             <div className="relative">
               <button
                 onClick={() => setStaffDropdownOpen(!staffDropdownOpen)}
@@ -202,6 +218,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* RIGHT UTILITIES */}
           <div className="flex items-center space-x-2">
+            <PWAInstallButton 
+              variant="compact" 
+              onOpenApkGuide={() => handleSelectNav('sih_showcase')} 
+            />
+
             {onOpenQuickLogin && (
               <button
                 onClick={() => {
@@ -253,6 +274,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Zap className="w-3.5 h-3.5 text-red-500" />
               <span>Fast Admit SOS (USP)</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectNav('sih_showcase')}
+              className={`w-full text-left p-2.5 rounded-lg flex items-center space-x-2 border border-amber-500/30 ${
+                activeView === 'sih_showcase' ? 'bg-white text-black font-semibold' : 'bg-[#111317] text-amber-400'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+              <span>SIH Showcase: Offline SMS & APK</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping ml-auto"></span>
             </button>
 
             <button

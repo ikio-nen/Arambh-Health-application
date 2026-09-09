@@ -11,6 +11,8 @@ import { secureLocalDB } from '../services/secureLocalDatabase';
 import { LocalClinicalStorage } from '../services/storage';
 import { aiModelCacheService } from '../services/aiModelCacheService';
 import { VibrationService } from '../services/vibrationService';
+import { SmsEmergencyService } from '../services/smsEmergencyService';
+import { MessageSquare, Send, Copy, Check } from 'lucide-react';
 
 interface FastAdmitVoiceProps {
   isOfflineMode: boolean;
@@ -51,6 +53,8 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [reservationToken, setReservationToken] = useState<string>('');
   const [admitSuccessCase, setAdmitSuccessCase] = useState<EmergencyCase | null>(null);
+  const [showSmsPreview, setShowSmsPreview] = useState<boolean>(false);
+  const [smsCopied, setSmsCopied] = useState<boolean>(false);
 
   // 1. Initialize GPS & Nearby Hospitals
   useEffect(() => {
@@ -330,6 +334,25 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
             >
               <span>Direct Hotline ({admitSuccessCase.ambulance_phone})</span>
             </a>
+            <a
+              href={SmsEmergencyService.buildSmsLaunchUrl(
+                SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER,
+                SmsEmergencyService.encodeEmergencyCase({
+                  lat: admitSuccessCase.lat,
+                  long: admitSuccessCase.long,
+                  age: patientAge || 45,
+                  gender: patientGender,
+                  triageTag: admitSuccessCase.triage_tag,
+                  condition: admitSuccessCase.condition_text,
+                  bedToken: reservationToken || 'BED-RES-108',
+                  targetHospital: admitSuccessCase.assigned_hospital,
+                })
+              )}
+              className="py-3 px-4 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 font-mono text-xs uppercase flex items-center justify-center space-x-1.5 border border-red-500/30 cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4 text-red-400" />
+              <span>Offline SMS Backup (108)</span>
+            </a>
           </div>
         </div>
       )}
@@ -603,6 +626,103 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
             <span>Hands-free coordinates</span>
             <span>Zero queue on arrival</span>
           </div>
+        </div>
+
+        {/* OFFLINE SMS EMERGENCY DISPATCH (SIH RESILIENCE PROTOCOL) */}
+        <div className="pt-4 border-t border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <MessageSquare className="w-4 h-4 text-red-400" />
+              <span className="text-xs font-mono font-bold text-white uppercase">
+                Offline SMS Emergency Dispatch (108)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowSmsPreview(!showSmsPreview)}
+              className="text-[11px] font-mono text-slate-400 hover:text-white underline cursor-pointer"
+            >
+              {showSmsPreview ? 'Hide GSM String' : 'View GSM String'}
+            </button>
+          </div>
+
+          {showSmsPreview && (
+            <div className="p-3 bg-[#0a0b0e] border border-white/10 rounded-xl space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                <span>Compressed GSM 7-Bit Payload:</span>
+                <span className="text-emerald-400">
+                  {SmsEmergencyService.encodeEmergencyCase({
+                    lat,
+                    long,
+                    age: patientAge || 45,
+                    gender: patientGender,
+                    triageTag: selectedTag,
+                    condition: conditionText || 'Emergency intake',
+                    bedToken: reservationToken || 'BED-RES-108',
+                    targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
+                  }).length}/160 chars (Single SMS)
+                </span>
+              </div>
+              <div className="p-2.5 bg-[#14161a] rounded-lg font-mono text-xs text-amber-300 break-all select-all">
+                {SmsEmergencyService.encodeEmergencyCase({
+                  lat,
+                  long,
+                  age: patientAge || 45,
+                  gender: patientGender,
+                  triageTag: selectedTag,
+                  condition: conditionText || 'Emergency intake',
+                  bedToken: reservationToken || 'BED-RES-108',
+                  targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
+                })}
+              </div>
+              <div className="flex justify-end space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    VibrationService.triggerQuickTap();
+                    const payload = SmsEmergencyService.encodeEmergencyCase({
+                      lat,
+                      long,
+                      age: patientAge || 45,
+                      gender: patientGender,
+                      triageTag: selectedTag,
+                      condition: conditionText || 'Emergency intake',
+                      bedToken: reservationToken || 'BED-RES-108',
+                      targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
+                    });
+                    navigator.clipboard.writeText(payload);
+                    setSmsCopied(true);
+                    setTimeout(() => setSmsCopied(false), 2000);
+                  }}
+                  className="px-2.5 py-1 rounded bg-[#181b22] hover:bg-[#20242e] text-[11px] font-mono text-slate-300 flex items-center space-x-1 cursor-pointer border border-white/10"
+                >
+                  {smsCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{smsCopied ? 'Copied' : 'Copy SMS'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <a
+            href={SmsEmergencyService.buildSmsLaunchUrl(
+              SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER,
+              SmsEmergencyService.encodeEmergencyCase({
+                lat,
+                long,
+                age: patientAge || 45,
+                gender: patientGender,
+                triageTag: selectedTag,
+                condition: conditionText || 'Emergency Fast Admit',
+                bedToken: reservationToken || 'BED-RES-108',
+                targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
+              })
+            )}
+            onClick={() => VibrationService.triggerDispatchSuccess()}
+            className="w-full py-3 px-4 rounded-xl bg-red-500 hover:bg-red-400 text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-98"
+          >
+            <Send className="w-4 h-4" />
+            <span>Send Emergency SMS Directly to 108 (Works 100% Offline)</span>
+          </a>
         </div>
       </div>
     </div>
