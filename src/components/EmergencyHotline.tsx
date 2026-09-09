@@ -13,6 +13,10 @@ import { secureLocalDB } from '../services/secureLocalDatabase';
 import { aiModelCacheService, FirstAidResponse } from '../services/aiModelCacheService';
 import { bluetoothHoppingService, HopPacket } from '../services/bluetoothHopping';
 import { DatabaseCacheModal } from './DatabaseCacheModal';
+import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
+import { SmsDispatchModal } from './SmsDispatchModal';
+import { SmsEmergencyService } from '../services/smsEmergencyService';
+import { MessageSquare } from 'lucide-react';
 
 interface EmergencyHotlineProps {
   isOfflineMode: boolean;
@@ -50,6 +54,7 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
   // Inspector Modal
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState<boolean>(false);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
 
   // Interactive AI First Aid Assistant Chat
   const [aiChatMessages, setAiChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; source?: string }>>([]);
@@ -438,19 +443,19 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8" id="emergency-hotline-container">
-      {/* Black & Red Minimalist Header */}
+      {/* Refined Minimal Healthcare Header */}
       <div className="text-center max-w-2xl mx-auto mb-8">
-        <div className="inline-flex items-center space-x-2 px-3 py-1 bg-red-950/60 border border-red-800/80 rounded-full mb-3">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
-          <span className="text-[10px] uppercase tracking-widest text-red-400 font-mono font-bold">
-            ARAMBH RED-ALERT • 2.4 GHz BLUETOOTH HOPPING READY
+        <div className="inline-flex items-center space-x-2 px-3 py-1 bg-rose-50 border border-rose-200 rounded-full mb-3 shadow-xs">
+          <div className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></div>
+          <span className="text-xs uppercase tracking-wider text-rose-700 font-semibold">
+            Emergency Dispatch • Offline BLE Mesh Ready
           </span>
         </div>
-        <h2 className="text-4xl sm:text-5xl font-black tracking-tight mb-3 text-white">
+        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2.5 text-slate-900">
           Emergency SOS Intake
         </h2>
-        <p className="text-neutral-400 text-sm sm:text-base leading-relaxed">
-          High-urgency emergency dispatch with real-time AI first-aid triage, offline AES-256 storage, and 40-channel Bluetooth mesh relay.
+        <p className="text-slate-500 text-sm sm:text-base leading-relaxed">
+          High-urgency emergency dispatch with real-time AI first-aid triage, offline AES-256 storage, and multi-channel Bluetooth mesh relay.
         </p>
 
         {/* Database & Cache Inspector Trigger */}
@@ -458,26 +463,26 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
           <button
             type="button"
             onClick={() => setIsInspectorModalOpen(true)}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg text-xs font-mono text-neutral-300 hover:text-white transition-colors cursor-pointer"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-xs"
           >
-            <Database className="w-3.5 h-3.5 text-red-400" />
+            <Database className="w-3.5 h-3.5 text-sky-600" />
             <span>Inspect Embedded DB & AI Cache</span>
           </button>
         </div>
       </div>
 
-      {/* Hero Action Call Buttons (Black & Red Grid) */}
+      {/* Hero Action Call Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
         <a
           href="tel:108"
           id="btn-call-hotline"
-          className="flex flex-col items-center justify-center p-6 bg-neutral-950 border border-red-900/40 rounded-xl hover:border-red-600 transition-colors group cursor-pointer shadow-lg shadow-black"
+          className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 hover:border-rose-300 rounded-2xl transition-all group cursor-pointer shadow-xs"
         >
-          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center mb-3 shadow-lg shadow-red-950/80 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 bg-rose-600 rounded-2xl flex items-center justify-center mb-3 shadow-xs group-hover:scale-105 transition-transform">
             <PhoneCall className="w-6 h-6 text-white" />
           </div>
-          <span className="text-sm font-bold uppercase tracking-widest text-white">Call 108 / 911 Hotline</span>
-          <span className="text-[10px] text-neutral-400 font-mono mt-1">Direct Emergency Dispatch Line</span>
+          <span className="text-sm font-bold tracking-tight text-slate-900">Call 108 / 911 Hotline</span>
+          <span className="text-xs text-slate-500 mt-1">Direct Emergency Dispatch Line</span>
         </a>
 
         <button
@@ -490,45 +495,45 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
             }
           }}
           id="btn-start-intake"
-          className="flex flex-col items-center justify-center p-6 bg-neutral-950 border border-neutral-800 hover:border-red-800/60 rounded-xl transition-colors group cursor-pointer shadow-lg shadow-black"
+          className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 hover:border-sky-300 rounded-2xl transition-all group cursor-pointer shadow-xs"
         >
-          <div className="w-12 h-12 bg-neutral-900 border border-neutral-700 rounded-full flex items-center justify-center mb-3 group-hover:border-red-600 transition-colors">
-            <Radio className="w-6 h-6 text-red-500" />
+          <div className="w-12 h-12 bg-sky-50 border border-sky-200 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-sky-100 transition-colors">
+            <Radio className="w-6 h-6 text-sky-600" />
           </div>
-          <span className="text-sm font-bold uppercase tracking-widest text-white">Rapid Clinical Intake</span>
-          <span className="text-[10px] text-neutral-400 font-mono mt-1">GPS Hospital Routing + AI Triage</span>
+          <span className="text-sm font-bold tracking-tight text-slate-900">Rapid Clinical Intake</span>
+          <span className="text-xs text-slate-500 mt-1">GPS Hospital Routing + AI Triage</span>
         </button>
       </div>
 
       {/* Bluetooth Mesh Hopping Live Alert Banner if relayed */}
       {bleHopPacket && (
-        <div className="max-w-4xl mx-auto p-4 bg-neutral-950 border border-red-700/60 rounded-xl space-y-2">
+        <div className="max-w-4xl mx-auto p-4 bg-white border border-sky-200 rounded-2xl space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Radio className="w-4 h-4 text-red-500 animate-pulse" />
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
+              <Radio className="w-4 h-4 text-sky-600 animate-pulse" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-900">
                 Bluetooth Hopping Mesh Relay Active
               </span>
             </div>
-            <span className="text-[10px] font-mono text-green-400 font-bold">
-              DELIVERED ({bleHopPacket.latencyMs}ms)
+            <span className="text-xs font-semibold text-emerald-600">
+              Delivered ({bleHopPacket.latencyMs}ms)
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-neutral-300">
-            <span className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-white font-bold">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-medium text-slate-800">
               Packet ID: {bleHopPacket.packetId}
             </span>
             <span>•</span>
-            <span>Hops: <strong className="text-red-400">{bleHopPacket.hopCount}/3</strong></span>
+            <span>Hops: <strong className="text-sky-700">{bleHopPacket.hopCount}/3</strong></span>
             <span>•</span>
-            <span>CRC: <strong className="text-neutral-200">{bleHopPacket.crc32}</strong></span>
+            <span>CRC: <strong className="text-slate-700">{bleHopPacket.crc32}</strong></span>
             <span>•</span>
-            <span className="text-neutral-400">Channels: {bleHopPacket.channelsHopped.join(' ➔ ')}</span>
+            <span className="text-slate-500">Channels: {bleHopPacket.channelsHopped.join(' ➔ ')}</span>
           </div>
 
-          <p className="text-[11px] font-mono text-neutral-400">
-            Route: [Dispatcher] ➔ [Ambulance DL-108 Transceiver] ➔ [District Tower Repeater] ➔ [AIIMS ER Gateway]
+          <p className="text-xs text-slate-500">
+            Route: [Dispatcher] ➔ [Ambulance DL-108 Transceiver] ➔ [District Tower Repeater] ➔ [Hospital ER Gateway]
           </p>
         </div>
       )}
@@ -537,71 +542,71 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
       {!activeCase ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Intake Form Column */}
-          <div className="lg:col-span-8 bg-neutral-950 border border-neutral-900 rounded-xl p-6 sm:p-8" id="intake-form-wrapper">
-            <div className="flex items-center justify-between border-b border-neutral-900 pb-4 mb-6">
+          <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs" id="intake-form-wrapper">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
               <div>
-                <span className="text-[10px] font-mono text-red-500 uppercase tracking-widest font-bold">RAPID CLINICAL INTAKE</span>
-                <h3 className="text-lg font-black text-white tracking-tight">Patient Assessment & Geolocation</h3>
+                <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider">Rapid Clinical Intake</span>
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Patient Assessment & Geolocation</h3>
               </div>
-              <div className="flex items-center space-x-2 px-2.5 py-1 bg-red-950/40 border border-red-900/60 rounded-full">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></div>
-                <span className="text-[9px] font-mono text-red-300 uppercase tracking-widest font-bold">OFF-GRID SECURE DB</span>
+              <div className="flex items-center space-x-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
+                <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-pulse"></div>
+                <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">Encrypted Local DB</span>
               </div>
             </div>
 
             <form onSubmit={handleSubmitIntake} className="space-y-6">
               {/* Quick preset symptom buttons */}
               <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-3">
-                  SCENARIO PRESETS (TAP TO AUTO-FILL)
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                  Scenario Presets (Tap to Auto-fill)
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePresetSelect('Crushing chest pain radiating to left arm and jaw, profuse cold sweating, patient clutched chest.')}
-                    className="p-4 bg-neutral-900/90 rounded-lg border-l-4 border-red-600 text-left hover:bg-neutral-800 transition-colors cursor-pointer border border-neutral-800"
+                    className="p-4 bg-slate-50/70 hover:bg-slate-100/90 rounded-xl border border-slate-200 border-l-4 border-l-rose-600 text-left transition-colors cursor-pointer"
                   >
-                    <p className="text-[10px] text-red-400 mb-1 font-mono font-bold">CODE: RED [CARDIAC]</p>
-                    <p className="text-sm font-bold text-white">Suspected Cardiac Event</p>
-                    <p className="text-xs text-neutral-400 mt-1">Crushing chest pain, arm radiation, cold sweat</p>
+                    <p className="text-[10px] text-rose-700 mb-1 font-semibold uppercase">Code: Red [Cardiac]</p>
+                    <p className="text-sm font-bold text-slate-900">Suspected Cardiac Event</p>
+                    <p className="text-xs text-slate-500 mt-1">Crushing chest pain, arm radiation, cold sweat</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handlePresetSelect('Deep bleeding wound on right leg with heavy blood flow after accident, patient feeling faint.')}
-                    className="p-4 bg-neutral-900/90 rounded-lg border-l-4 border-red-500 text-left hover:bg-neutral-800 transition-colors cursor-pointer border border-neutral-800"
+                    className="p-4 bg-slate-50/70 hover:bg-slate-100/90 rounded-xl border border-slate-200 border-l-4 border-l-amber-500 text-left transition-colors cursor-pointer"
                   >
-                    <p className="text-[10px] text-red-400 mb-1 font-mono font-bold">CODE: AMBER [TRAUMA]</p>
-                    <p className="text-sm font-bold text-white">Severe Arterial Trauma</p>
-                    <p className="text-xs text-neutral-400 mt-1">Profuse bleeding, laceration, hypotension risk</p>
+                    <p className="text-[10px] text-amber-700 mb-1 font-semibold uppercase">Code: Amber [Trauma]</p>
+                    <p className="text-sm font-bold text-slate-900">Severe Arterial Trauma</p>
+                    <p className="text-xs text-slate-500 mt-1">Profuse bleeding, laceration, hypotension risk</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handlePresetSelect('Acute severe asthma attack, choking, wheezing heavily, lips turning blue, unable to speak in sentences.')}
-                    className="p-4 bg-neutral-900/90 rounded-lg border-l-4 border-red-700 text-left hover:bg-neutral-800 transition-colors cursor-pointer border border-neutral-800"
+                    className="p-4 bg-slate-50/70 hover:bg-slate-100/90 rounded-xl border border-slate-200 border-l-4 border-l-sky-600 text-left transition-colors cursor-pointer"
                   >
-                    <p className="text-[10px] text-neutral-300 mb-1 font-mono font-bold">CODE: RED [AIRWAY]</p>
-                    <p className="text-sm font-bold text-white">Respiratory Distress / Choking</p>
-                    <p className="text-xs text-neutral-400 mt-1">Severe wheezing, cyanosis, airway obstruction</p>
+                    <p className="text-[10px] text-sky-700 mb-1 font-semibold uppercase">Code: Red [Airway]</p>
+                    <p className="text-sm font-bold text-slate-900">Respiratory Distress / Choking</p>
+                    <p className="text-xs text-slate-500 mt-1">Severe wheezing, cyanosis, airway obstruction</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handlePresetSelect('Person collapsed on floor, unconscious and unresponsive, weak or irregular pulse.')}
-                    className="p-4 bg-neutral-900/90 rounded-lg border-l-4 border-neutral-600 text-left hover:bg-neutral-800 transition-colors cursor-pointer border border-neutral-800"
+                    className="p-4 bg-slate-50/70 hover:bg-slate-100/90 rounded-xl border border-slate-200 border-l-4 border-l-slate-400 text-left transition-colors cursor-pointer"
                   >
-                    <p className="text-[10px] text-neutral-400 mb-1 font-mono font-bold">CODE: RED [COLLAPSE]</p>
-                    <p className="text-sm font-bold text-white">Unresponsive / Syncope</p>
-                    <p className="text-xs text-neutral-400 mt-1">Sudden loss of consciousness, weak pulse</p>
+                    <p className="text-[10px] text-slate-600 mb-1 font-semibold uppercase">Code: Red [Collapse]</p>
+                    <p className="text-sm font-bold text-slate-900">Unresponsive / Syncope</p>
+                    <p className="text-xs text-slate-500 mt-1">Sudden loss of consciousness, weak pulse</p>
                   </button>
                 </div>
               </div>
 
               {/* Condition text area */}
               <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">
-                  PATIENT CONDITION DESCRIPTION *
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Patient Condition Description *
                 </label>
                 <textarea
                   required
@@ -610,56 +615,56 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   value={conditionText}
                   onChange={(e) => setConditionText(e.target.value)}
                   placeholder="Describe patient status, chief symptoms, pain location, consciousness..."
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-red-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
                 />
               </div>
 
               {/* GPS Geolocation Coordinates */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
-                    EMERGENCY GPS COORDINATES
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Emergency GPS Coordinates
                   </label>
                   <button
                     type="button"
                     onClick={handleDetectLocation}
                     disabled={locationDetecting}
-                    className="text-xs font-mono text-red-400 hover:text-red-300 flex items-center space-x-1 cursor-pointer"
+                    className="text-xs font-medium text-sky-700 hover:text-sky-800 flex items-center space-x-1 cursor-pointer"
                   >
                     <Navigation className={`w-3.5 h-3.5 ${locationDetecting ? 'animate-spin' : ''}`} />
-                    <span>{locationDetecting ? 'Detecting Fix...' : 'Acquire GPS Position'}</span>
+                    <span>{locationDetecting ? 'Acquiring GPS...' : 'Acquire Current GPS'}</span>
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-[10px] text-neutral-500 font-mono">LATITUDE</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Latitude</span>
                     <input
                       type="number"
                       step="any"
                       value={lat}
                       onChange={(e) => setLat(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-red-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                       placeholder="28.6139"
                     />
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-neutral-500 font-mono">LONGITUDE</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Longitude</span>
                     <input
                       type="number"
                       step="any"
                       value={long}
                       onChange={(e) => setLong(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-red-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                       placeholder="77.2090"
                     />
                   </div>
                 </div>
 
                 {locationStatus && (
-                  <p className="text-[11px] font-mono text-neutral-400 flex items-center space-x-1.5">
-                    <MapPin className="w-3 h-3 text-red-500" />
+                  <p className="text-xs text-slate-500 flex items-center space-x-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
                     <span>{locationStatus}</span>
                   </p>
                 )}
@@ -667,15 +672,15 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
               {/* Contact Phone */}
               <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">
-                  CALLER / ON-SCENE CONTACT NUMBER
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Caller / On-Scene Contact Number
                 </label>
                 <input
                   type="tel"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                   placeholder="+91 98112 34567 (Optional)"
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-red-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
               </div>
 
@@ -685,12 +690,12 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   type="submit"
                   disabled={isSubmitting || !conditionText.trim()}
                   id="btn-submit-emergency-intake"
-                  className="w-full bg-red-600 hover:bg-red-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-white font-bold py-3.5 px-6 rounded-lg uppercase tracking-widest text-xs flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-lg shadow-red-950/80"
+                  className="w-full bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-3.5 px-6 rounded-xl text-xs sm:text-sm flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
                 >
                   {isSubmitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Dispatching & Querying AI Cache...</span>
+                      <span>Dispatching & Querying Protocols...</span>
                     </>
                   ) : (
                     <>
@@ -704,9 +709,9 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   type="button"
                   onClick={handleBroadcastBleMesh}
                   disabled={bleBroadcastActive || !conditionText.trim()}
-                  className="w-full bg-neutral-900 hover:bg-neutral-850 border border-red-900/60 hover:border-red-600 text-neutral-200 hover:text-white font-mono uppercase tracking-wider text-xs py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                  className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer"
                 >
-                  <Radio className={`w-4 h-4 text-red-500 ${bleBroadcastActive ? 'animate-spin' : ''}`} />
+                  <Radio className={`w-4 h-4 text-sky-600 ${bleBroadcastActive ? 'animate-spin' : ''}`} />
                   <span>
                     {bleBroadcastActive 
                       ? 'Hopping across 2.4 GHz Bluetooth Mesh...' 
@@ -716,7 +721,7 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
               </div>
 
               {bleRelayStatus && (
-                <p className="text-xs font-mono text-neutral-300 p-3 bg-neutral-900 border border-neutral-800 rounded-lg">
+                <p className="text-xs text-slate-700 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   {bleRelayStatus}
                 </p>
               )}
@@ -725,80 +730,89 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
           {/* Clinical Protocol Sidebar */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-xl space-y-4">
-              <div className="flex items-center space-x-2 border-b border-neutral-900 pb-3">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <span className="text-xs font-mono uppercase tracking-widest text-neutral-300 font-bold">
-                  PROCEDURE GUIDE
+            <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs">
+              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+                <div className="w-2 h-2 rounded-full bg-sky-600"></div>
+                <span className="text-xs uppercase tracking-wider text-slate-700 font-bold">
+                  Procedure Guide
                 </span>
               </div>
-              <ol className="space-y-4 text-sm font-sans">
+              <ol className="space-y-4 text-xs sm:text-sm">
                 <li className="flex space-x-3">
-                  <span className="text-red-500 font-mono text-[10px] mt-0.5 font-bold">01</span>
-                  <span className="text-neutral-300">Loosen restrictive clothing around patient's neck and chest.</span>
+                  <span className="w-5 h-5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">01</span>
+                  <span className="text-slate-600">Loosen restrictive clothing around patient's neck and chest.</span>
                 </li>
                 <li className="flex space-x-3">
-                  <span className="text-red-500 font-mono text-[10px] mt-0.5 font-bold">02</span>
-                  <span className="text-neutral-300">Help patient into a comfortable resting position (sitting or side).</span>
+                  <span className="w-5 h-5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">02</span>
+                  <span className="text-slate-600">Help patient into a comfortable resting position (sitting or side).</span>
                 </li>
                 <li className="flex space-x-3">
-                  <span className="text-red-500 font-mono text-[10px] mt-0.5 font-bold">03</span>
-                  <span className="text-white font-bold">Monitor breathing rate and pulse every 60 seconds.</span>
+                  <span className="w-5 h-5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">03</span>
+                  <span className="text-slate-900 font-medium">Monitor breathing rate and pulse continuously until help arrives.</span>
                 </li>
               </ol>
             </div>
 
             {/* Offline Embedded Database Status Card */}
-            <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-lg space-y-3">
+            <div className="p-5 bg-white border border-slate-200 rounded-2xl space-y-3 shadow-xs">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-neutral-500 uppercase font-mono">STORAGE STATUS</span>
-                <span className="text-[10px] font-mono text-green-400 flex items-center space-x-1 font-bold">
-                  <ShieldCheck className="w-3 h-3 text-green-400" />
-                  <span>EMBEDDED DB ACTIVE</span>
+                <span className="text-xs font-semibold text-slate-500 uppercase">Storage Status</span>
+                <span className="text-xs font-medium text-emerald-700 flex items-center space-x-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Local DB Active</span>
                 </span>
               </div>
-              <div className="w-full h-1 bg-neutral-900 rounded-full overflow-hidden">
-                <div className={`w-full h-full ${isOfflineMode ? 'bg-red-500' : 'bg-green-500'}`}></div>
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-full ${isOfflineMode ? 'w-full bg-amber-500' : 'w-full bg-emerald-500'}`}></div>
               </div>
-              <p className="text-[10px] text-neutral-400 font-mono">
-                IndexedDB AES-256-GCM hardware encryption active. Emergency cases synchronize automatically over BLE mesh or WiFi.
+              <p className="text-xs text-slate-500">
+                IndexedDB AES-256-GCM hardware encryption active. Emergency cases synchronize automatically over BLE mesh or network connection.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        /* ACTIVE DISPATCHED EMERGENCY INTERACTION SCREEN (Black & Red) */
+        /* ACTIVE DISPATCHED EMERGENCY INTERACTION SCREEN */
         <div className="space-y-6 max-w-5xl mx-auto" id="active-dispatch-container">
           {/* Dispatch Confirmation Card */}
-          <div className="bg-neutral-950 border border-red-900/60 rounded-xl p-6 sm:p-8 space-y-6 shadow-2xl shadow-black">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-neutral-900 pb-5">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 font-bold">
-                    DISPATCH CONFIRMED • CASE #{activeCase.id}
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse"></span>
+                  <span className="text-xs uppercase tracking-wider text-rose-700 font-semibold">
+                    Dispatch Confirmed • Case #{activeCase.id}
                   </span>
                 </div>
-                <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
+                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mt-1">
                   Ambulance En Route
                 </h3>
-                <div className="text-xs font-mono text-neutral-400 mt-1 flex flex-wrap items-center gap-2">
-                  <span>Patient ID: <strong className="text-red-400">{activeCase.patient_profile_id}</strong></span>
+                <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                  <span>Patient ID: <strong className="text-slate-800">{activeCase.patient_profile_id}</strong></span>
                   <span>•</span>
-                  <span>Status: <strong className="text-red-300 uppercase">{activeCase.status}</strong></span>
+                  <span>Status: <strong className="text-rose-700 uppercase font-semibold">{activeCase.status}</strong></span>
                   <span>•</span>
-                  <span className="text-neutral-400">AI Cache: {aiGuidance?.source || 'L1_PROTOCOL'} ({aiGuidance?.latency_ms || 1}ms)</span>
+                  <span className="text-slate-500">AI Protocol: {aiGuidance?.source || 'L1_PROTOCOL'} ({aiGuidance?.latency_ms || 1}ms)</span>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <a
                   href={`tel:${activeCase.ambulance_phone}`}
-                  className="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2.5 rounded-lg text-xs uppercase tracking-wider flex items-center space-x-2 transition-colors shadow-lg shadow-red-950/80 cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 transition-colors shadow-xs cursor-pointer"
                 >
                   <PhoneCall className="w-3.5 h-3.5" />
                   <span>Call Ambulance</span>
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSmsModalOpen(true)}
+                  className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-semibold px-3.5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Send SMS (108)</span>
+                </button>
 
                 <button
                   onClick={() => {
@@ -806,7 +820,7 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                     setActiveTriageDetails(null);
                     setAiGuidance(null);
                   }}
-                  className="bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 px-3 py-2.5 rounded-lg text-xs font-mono uppercase tracking-wider cursor-pointer"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors"
                 >
                   New Intake
                 </button>
@@ -815,40 +829,40 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
             {/* Hospital & Arrival Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-neutral-900 rounded-lg border-l-4 border-neutral-700">
-                <p className="text-[10px] text-neutral-500 mb-1 font-mono uppercase font-bold">ASSIGNED FACILITY</p>
-                <p className="text-sm font-bold text-white">{activeCase.assigned_hospital}</p>
-                <p className="text-xs font-mono text-neutral-400 mt-2">ER Hotline: {activeCase.hospital_phone}</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 border-l-4 border-l-slate-400">
+                <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Assigned Facility</p>
+                <p className="text-sm font-bold text-slate-900">{activeCase.assigned_hospital}</p>
+                <p className="text-xs text-slate-600 mt-2">ER Hotline: {activeCase.hospital_phone}</p>
               </div>
 
-              <div className="p-4 bg-neutral-900 rounded-lg border-l-4 border-red-600">
-                <p className="text-[10px] text-neutral-500 mb-1 font-mono uppercase font-bold">PARAMEDIC ETA</p>
-                <p className="text-2xl font-black text-red-500 tracking-tight">~{activeCase.eta_minutes} mins</p>
-                <p className="text-xs text-neutral-400 mt-1">{activeCase.distance_km} km distance</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 border-l-4 border-l-rose-600">
+                <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Paramedic ETA</p>
+                <p className="text-2xl font-bold text-rose-600 tracking-tight">~{activeCase.eta_minutes} mins</p>
+                <p className="text-xs text-slate-500 mt-1">{activeCase.distance_km} km distance</p>
               </div>
 
-              <div className="p-4 bg-neutral-900 rounded-lg border-l-4 border-red-500">
-                <p className="text-[10px] text-neutral-500 mb-1 font-mono uppercase font-bold">TRIAGE TAG</p>
-                <p className="text-sm font-bold text-red-400 uppercase font-mono">{activeCase.triage_tag} PROTOCOL</p>
-                <p className="text-xs text-neutral-400 mt-2">Urgency: {activeTriageDetails?.urgency || 'CRITICAL'}</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 border-l-4 border-l-amber-500">
+                <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Triage Tag</p>
+                <p className="text-sm font-bold text-amber-800 uppercase">{activeCase.triage_tag} PROTOCOL</p>
+                <p className="text-xs text-slate-500 mt-2">Urgency: {activeTriageDetails?.urgency || 'CRITICAL'}</p>
               </div>
             </div>
 
             {/* CPR Metronome Box (If Cardiac) */}
             {(activeTriageDetails?.cpr_advised || aiGuidance?.cpr_advised) && (
-              <div className="bg-neutral-900 border border-red-900/60 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-full bg-red-600 flex items-center justify-center ${cprMetronomeActive ? 'animate-ping' : ''}`}>
-                    <Heart className="w-5 h-5 text-white" />
+                  <div className={`w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center text-white ${cprMetronomeActive ? 'animate-pulse' : ''}`}>
+                    <Heart className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-bold text-red-400 text-xs font-mono uppercase">CPR METRONOME PACER (110 BPM)</div>
-                    <div className="text-xs text-neutral-300">Push down hard & fast in center of chest 2 inches deep. Synchronized audible tick active.</div>
+                    <div className="font-bold text-rose-900 text-xs uppercase tracking-wide">CPR Metronome Pacer (110 BPM)</div>
+                    <div className="text-xs text-rose-800">Push down hard & fast in center of chest 2 inches deep. Synchronized audible tick active.</div>
                   </div>
                 </div>
                 <button
                   onClick={() => setCprMetronomeActive(!cprMetronomeActive)}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded uppercase tracking-wider cursor-pointer"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl cursor-pointer shadow-xs transition-colors"
                 >
                   {cprMetronomeActive ? 'Mute Pacer' : 'Start Beat'}
                 </button>
@@ -856,19 +870,25 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
             )}
           </div>
 
+          {/* DELIVERY APP STYLE LIVE AMBULANCE TRACKER */}
+          <AmbulanceLiveTracker 
+            emergencyCase={activeCase} 
+            onCallAmbulance={() => {}} 
+          />
+
           {/* INTERACTIVE STEP-BY-STEP FIRST AID GUIDANCE ENGINE */}
           {aiGuidance && aiGuidance.first_aid_steps.length > 0 && (
-            <div className="bg-neutral-950 border border-neutral-900 rounded-xl p-6 sm:p-8 space-y-6">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
               {/* Guidance Engine Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-900 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-red-400" />
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 font-bold">
-                      STEP-BY-STEP FIRST AID GUIDANCE • AI RESOLVED
+                    <Sparkles className="w-4 h-4 text-sky-600" />
+                    <span className="text-xs font-semibold text-sky-700 uppercase tracking-wider">
+                      Step-by-Step First Aid Guidance • AI Protocol
                     </span>
                   </div>
-                  <h4 className="text-xl font-black text-white tracking-tight mt-1">
+                  <h4 className="text-xl font-bold text-slate-900 tracking-tight mt-1">
                     {aiGuidance.primary_condition}
                   </h4>
                 </div>
@@ -881,10 +901,10 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                         handleSpeakStep(`Step ${currentStep.step_number}. ${currentStep.title}. ${currentStep.action}`);
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-mono uppercase flex items-center space-x-1.5 cursor-pointer transition-colors ${
+                    className={`px-3.5 py-1.5 rounded-xl border text-xs font-medium flex items-center space-x-1.5 cursor-pointer transition-colors ${
                       isSpeakingStep 
-                        ? 'bg-red-600 text-white border-red-500 animate-pulse' 
-                        : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white'
+                        ? 'bg-rose-600 text-white border-rose-500 animate-pulse' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     {isSpeakingStep ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
@@ -893,7 +913,7 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
 
                   <button
                     onClick={() => setIsInspectorModalOpen(true)}
-                    className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white text-xs cursor-pointer"
+                    className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-800 text-xs cursor-pointer"
                     title="View Cache Details"
                   >
                     <Info className="w-4 h-4" />
@@ -907,62 +927,62 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   <button
                     key={idx}
                     onClick={() => handleSelectStep(idx)}
-                    className={`px-3 py-2 rounded-lg text-xs font-mono whitespace-nowrap transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors flex items-center space-x-1.5 cursor-pointer ${
                       activeStepIndex === idx
-                        ? 'bg-red-600 text-white font-bold shadow-md shadow-red-950/80'
-                        : 'bg-neutral-900 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                        ? 'bg-sky-600 text-white font-semibold shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     }`}
                   >
                     <span>Step {st.step_number}</span>
-                    {idx < activeStepIndex && <Check className="w-3 h-3 text-green-400" />}
+                    {idx < activeStepIndex && <Check className="w-3 h-3 text-emerald-500" />}
                   </button>
                 ))}
               </div>
 
               {/* Active Step Card */}
               {currentStep && (
-                <div className="p-6 bg-neutral-900/90 border border-neutral-800 rounded-xl space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/80 pb-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-xs font-bold text-white font-mono">
+                <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="w-6 h-6 rounded-full bg-sky-600 flex items-center justify-center text-xs font-bold text-white">
                         {currentStep.step_number}
                       </span>
-                      <h5 className="text-base sm:text-lg font-bold text-white">
+                      <h5 className="text-base sm:text-lg font-bold text-slate-900">
                         {currentStep.title}
                       </h5>
                     </div>
 
                     {/* Step Countdown Timer */}
                     <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-red-400" />
-                      <span className="text-xs font-mono text-red-400 font-bold">
+                      <Clock className="w-4 h-4 text-sky-600" />
+                      <span className="text-xs font-medium text-sky-800">
                         {stepSecondsLeft > 0 ? `${stepSecondsLeft}s Recommended` : 'Completed'}
                       </span>
                       <button
                         onClick={() => setIsStepTimerRunning(!isStepTimerRunning)}
-                        className="text-neutral-400 hover:text-white p-1 rounded hover:bg-neutral-800 cursor-pointer"
+                        className="text-slate-500 hover:text-slate-800 p-1 rounded-lg hover:bg-slate-200 cursor-pointer"
                       >
                         {isStepTimerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
 
-                  <p className="text-sm sm:text-base text-neutral-200 leading-relaxed font-sans">
+                  <p className="text-sm text-slate-700 leading-relaxed">
                     {currentStep.action}
                   </p>
 
                   {/* Vital Check Callout */}
                   {currentStep.vital_check && (
-                    <div className="p-3 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-mono text-neutral-300 flex items-center space-x-2">
-                      <Activity className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 flex items-center space-x-2 shadow-xs">
+                      <Activity className="w-4 h-4 text-sky-600 flex-shrink-0" />
                       <span>Vital Observation: {currentStep.vital_check}</span>
                     </div>
                   )}
 
                   {/* Warning Callout */}
                   {currentStep.warning && (
-                    <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-lg text-xs font-mono text-red-300 flex items-center space-x-2">
-                      <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center space-x-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                       <span>Safety Warning: {currentStep.warning}</span>
                     </div>
                   )}
@@ -971,16 +991,16 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   <div className="flex items-center justify-between pt-2">
                     <button
                       onClick={() => handleSpeakStep(`${currentStep.title}. ${currentStep.action}`)}
-                      className="text-xs font-mono text-neutral-400 hover:text-white flex items-center space-x-1.5 cursor-pointer"
+                      className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1.5 cursor-pointer"
                     >
-                      <Volume2 className="w-3.5 h-3.5 text-red-400" />
+                      <Volume2 className="w-3.5 h-3.5 text-sky-600" />
                       <span>Repeat Step Voice</span>
                     </button>
 
                     <button
                       onClick={handleNextStep}
                       disabled={activeStepIndex >= aiGuidance.first_aid_steps.length - 1}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white text-xs font-mono uppercase tracking-wider rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer"
+                      className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-medium rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer"
                     >
                       <span>{activeStepIndex >= aiGuidance.first_aid_steps.length - 1 ? 'All Steps Completed' : 'Next Step'}</span>
                       <SkipForward className="w-3.5 h-3.5" />
@@ -994,39 +1014,39 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
           {/* First Aid Instructions & Live AI Chat Split */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Do's and Don'ts */}
-            <div className="lg:col-span-7 bg-neutral-950 border border-neutral-900 rounded-xl p-6 space-y-4">
-              <div className="flex items-center space-x-2 border-b border-neutral-900 pb-3">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <h4 className="text-xs font-mono uppercase tracking-widest text-neutral-300 font-bold">
-                  CRITICAL DO'S AND DON'TS
+            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs">
+              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+                <div className="w-2 h-2 rounded-full bg-rose-600"></div>
+                <h4 className="text-xs uppercase tracking-wider text-slate-700 font-bold">
+                  Critical Do's and Don'ts
                 </h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-2">
-                  <div className="text-[10px] font-mono text-green-400 uppercase tracking-widest flex items-center space-x-1.5 font-bold">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>WHAT TO DO NOW</span>
+                <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-2">
+                  <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>What to do now</span>
                   </div>
-                  <ul className="text-xs text-neutral-300 space-y-1.5">
+                  <ul className="text-xs text-slate-700 space-y-1.5">
                     {activeTriageDetails?.immediate_dos?.map((item: string, i: number) => (
                       <li key={i} className="flex items-start space-x-1.5">
-                        <span className="text-green-400">•</span>
+                        <span className="text-emerald-600 font-bold">•</span>
                         <span>{item}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="bg-neutral-900 border border-red-950/80 rounded-lg p-4 space-y-2">
-                  <div className="text-[10px] font-mono text-red-400 uppercase tracking-widest flex items-center space-x-1.5 font-bold">
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>DO NOT DO (PREVENT COMPLICATIONS)</span>
+                <div className="bg-rose-50/60 border border-rose-200 rounded-xl p-4 space-y-2">
+                  <div className="text-xs font-semibold text-rose-800 uppercase tracking-wide flex items-center space-x-1.5">
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Do not do</span>
                   </div>
-                  <ul className="text-xs text-neutral-300 space-y-1.5">
+                  <ul className="text-xs text-slate-700 space-y-1.5">
                     {activeTriageDetails?.immediate_donts?.map((item: string, i: number) => (
                       <li key={i} className="flex items-start space-x-1.5">
-                        <span className="text-red-400">•</span>
+                        <span className="text-rose-600 font-bold">•</span>
                         <span>{item}</span>
                       </li>
                     ))}
@@ -1036,14 +1056,14 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
             </div>
 
             {/* Interactive First Aid AI Advisor Chat */}
-            <div className="lg:col-span-5 bg-neutral-950 border border-neutral-900 rounded-xl p-5 flex flex-col h-[480px]">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-3 mb-3">
+            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col h-[480px] shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
                 <div>
-                  <h4 className="text-xs font-bold text-white tracking-tight">AI Medic Chatbot</h4>
-                  <p className="text-[10px] font-mono text-neutral-500 uppercase">Interactive Bystander Advice</p>
+                  <h4 className="text-sm font-bold text-slate-900 tracking-tight">AI Medic Chatbot</h4>
+                  <p className="text-xs text-slate-500">Interactive Bystander Advice</p>
                 </div>
-                <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-neutral-900 text-red-400 border border-neutral-800 uppercase font-bold">
-                  {aiGuidance?.source || 'AI ACTIVE'}
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 uppercase">
+                  {aiGuidance?.source || 'AI Active'}
                 </span>
               </div>
 
@@ -1052,51 +1072,51 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                 {aiChatMessages.map((msg, idx) => (
                   <div
                     key={idx}
-                    className={`p-3 rounded-lg max-w-[90%] leading-relaxed ${
+                    className={`p-3 rounded-2xl max-w-[90%] leading-relaxed ${
                       msg.sender === 'ai'
-                        ? 'bg-neutral-900 text-neutral-200 border border-neutral-800 mr-auto'
-                        : 'bg-red-600 text-white ml-auto'
+                        ? 'bg-slate-50 text-slate-800 border border-slate-200 mr-auto'
+                        : 'bg-sky-600 text-white ml-auto'
                     }`}
                   >
                     <div>{msg.text}</div>
                     {msg.source && (
-                      <div className="text-[9px] font-mono text-neutral-500 mt-1">Source: {msg.source}</div>
+                      <div className="text-[9px] text-slate-400 mt-1">Source: {msg.source}</div>
                     )}
                   </div>
                 ))}
 
                 {aiTyping && (
-                  <div className="bg-neutral-900 text-neutral-400 p-2.5 rounded-lg border border-neutral-800 mr-auto inline-flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:0.2s]"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:0.4s]"></span>
+                  <div className="bg-slate-50 text-slate-500 p-2.5 rounded-xl border border-slate-200 mr-auto inline-flex items-center space-x-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.2s]"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.4s]"></span>
                   </div>
                 )}
               </div>
 
               {/* Quick Questions */}
-              <div className="py-2 flex flex-wrap gap-1.5 border-t border-neutral-900">
+              <div className="py-2 flex flex-wrap gap-1.5 border-t border-slate-100">
                 <button
                   onClick={() => setUserQuery('Can I give them water or food?')}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer transition-colors"
                 >
                   Give water?
                 </button>
                 <button
                   onClick={() => setUserQuery('How do I do chest compressions?')}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer transition-colors"
                 >
                   How to CPR?
                 </button>
                 <button
                   onClick={() => setUserQuery('What is recovery position?')}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer transition-colors"
                 >
                   Recovery position?
                 </button>
                 <button
                   onClick={() => setUserQuery('Bleeding is soaking through cloths!')}
-                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer transition-colors"
                 >
                   Severe bleeding?
                 </button>
@@ -1109,12 +1129,12 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
                   value={userQuery}
                   onChange={(e) => setUserQuery(e.target.value)}
                   placeholder="Ask urgent first-aid question..."
-                  className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-red-600 font-mono"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
                 <button
                   type="submit"
                   disabled={!userQuery.trim()}
-                  className="bg-red-600 hover:bg-red-500 disabled:bg-neutral-900 text-white p-2 rounded-lg cursor-pointer"
+                  className="bg-sky-600 hover:bg-sky-700 disabled:bg-slate-100 disabled:text-slate-400 text-white p-2.5 rounded-xl cursor-pointer transition-colors"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -1129,6 +1149,30 @@ export const EmergencyHotline: React.FC<EmergencyHotlineProps> = ({ isOfflineMod
         isOpen={isInspectorModalOpen}
         onClose={() => setIsInspectorModalOpen(false)}
         isOfflineMode={isOfflineMode}
+      />
+
+      {/* Emergency SMS Dispatch Modal */}
+      <SmsDispatchModal
+        isOpen={isSmsModalOpen}
+        onClose={() => setIsSmsModalOpen(false)}
+        initialMessage={activeCase ? SmsEmergencyService.encodeEmergencyCase({
+          lat: activeCase.lat,
+          long: activeCase.long,
+          triageTag: activeCase.triage_tag,
+          condition: activeCase.condition_text,
+          bedToken: `BED-RES-${activeCase.id.slice(-4)}`,
+          targetHospital: activeCase.assigned_hospital,
+        }) : SmsEmergencyService.encodeEmergencyCase({
+          lat: typeof lat === 'number' ? lat : 28.6139,
+          long: typeof long === 'number' ? long : 77.2090,
+          triageTag: 'unclear',
+          condition: conditionText || 'Emergency intake from Arambh Health',
+          bedToken: 'BED-RES-0108',
+          targetHospital: 'Metro Trauma Center',
+        })}
+        initialPhone={contactPhone || '108'}
+        caseId={activeCase?.id || 'EMG-108'}
+        targetHospital={activeCase?.assigned_hospital || 'Metro Trauma Center'}
       />
     </div>
   );

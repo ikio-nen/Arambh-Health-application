@@ -214,33 +214,33 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto p-4 sm:p-6 space-y-4 text-slate-100" id="receptionist-agent-view">
+    <div className="w-full max-w-3xl mx-auto p-4 sm:p-6 space-y-4 text-slate-800" id="receptionist-agent-view">
       {/* Refined Minimal Header */}
-      <div className="bg-[#111317] border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center space-x-3">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-[#181b22] hover:bg-[#20242e] text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               title="Back"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+          <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700">
             <Bot className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Emergency Reception Desk
               </span>
-              <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                LIVE CALL
+              <span className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Connected
               </span>
             </div>
-            <h1 className="text-base font-bold text-white tracking-tight">
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
               {targetHospital}
             </h1>
           </div>
@@ -251,28 +251,28 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
           {/* Physical Vibration Pulse Toggle */}
           <button
             onClick={toggleCallVibration}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center space-x-1.5 border transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 border transition-all cursor-pointer ${
               isVibratingCall
-                ? 'bg-[#181b22] border-red-500/40 text-red-400'
-                : 'bg-[#181b22] border-white/5 text-slate-500'
+                ? 'bg-rose-50 border-rose-200 text-rose-700 font-medium'
+                : 'bg-slate-50 border-slate-200 text-slate-500'
             }`}
             title="Toggle Physical Vibration Feedback during emergency call"
           >
             <Smartphone className="w-3.5 h-3.5" />
-            <span>{isVibratingCall ? 'HAPTIC ACTIVE' : 'HAPTIC OFF'}</span>
+            <span>{isVibratingCall ? 'Haptic On' : 'Haptic Off'}</span>
           </button>
 
           {/* CPR Metronome */}
           <button
             onClick={() => setCprActive(!cprActive)}
-            className={`px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer border ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer border ${
               cprActive
-                ? 'bg-red-500 text-white border-red-400'
-                : 'bg-[#181b22] border-white/10 text-slate-300 hover:text-white'
+                ? 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-200'
+                : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            <Heart className={`w-3.5 h-3.5 ${cprActive ? 'fill-white' : 'text-red-400'}`} />
-            <span>{cprActive ? '110 BPM' : 'CPR RHYTHM'}</span>
+            <Heart className={`w-3.5 h-3.5 ${cprActive ? 'fill-white' : 'text-rose-600'}`} />
+            <span>{cprActive ? '110 BPM' : 'CPR Guide'}</span>
           </button>
 
           {/* Voice Mute */}
@@ -281,26 +281,26 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
               if (speechEnabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
               setSpeechEnabled(!speechEnabled);
             }}
-            className="p-2 rounded-lg bg-[#181b22] text-slate-400 hover:text-white border border-white/5 cursor-pointer"
+            className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 cursor-pointer transition-colors"
             title={speechEnabled ? 'Mute Speech' : 'Enable Speech'}
           >
-            {speechEnabled ? <Volume2 className="w-4 h-4 text-slate-300" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+            {speechEnabled ? <Volume2 className="w-4 h-4 text-sky-700" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
           </button>
         </div>
       </div>
 
       {/* Bed Reservation & Ambulance Pill */}
       {activeCase && (
-        <div className="bg-[#14161a] border border-white/5 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs font-mono">
+        <div className="bg-sky-50/60 border border-sky-200 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-white font-medium">Bed Reserved ({activeCase.id})</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="text-slate-800 font-semibold">Bed Reserved (#{activeCase.id})</span>
           </div>
-          <div className="flex items-center space-x-3 text-slate-400">
-            <span>Ambulance ETA: <b className="text-white">~{activeCase.eta_minutes}m</b></span>
+          <div className="flex items-center space-x-3 text-slate-600">
+            <span>Ambulance ETA: <b className="text-sky-900 font-bold">~{activeCase.eta_minutes} mins</b></span>
             <a 
               href={`tel:${activeCase.ambulance_phone}`}
-              className="px-2 py-0.5 rounded bg-red-500 hover:bg-red-400 text-white font-bold"
+              className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium shadow-xs"
             >
               Call
             </a>
@@ -308,25 +308,25 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
         </div>
       )}
 
-      {/* CHAT MESSAGES LOG: MINIMALIST OBSIDIAN TILES */}
-      <div className="bg-[#111317] border border-white/5 rounded-2xl p-4 min-h-[380px] max-h-[440px] overflow-y-auto space-y-3 shadow-inner">
+      {/* CHAT MESSAGES LOG */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 min-h-[380px] max-h-[440px] overflow-y-auto space-y-3 shadow-xs">
         {messages.map((msg, idx) => (
           <div
             key={idx}
             className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
           >
             <div className="flex items-center space-x-1.5 mb-1 px-1">
-              <span className="text-[10px] font-mono text-slate-400 uppercase">
+              <span className="text-[10px] text-slate-400 font-medium">
                 {msg.sender === 'agent' ? `Receptionist (${targetHospital})` : 'You'}
               </span>
-              <span className="text-[10px] font-mono text-slate-600">• {msg.time}</span>
+              <span className="text-[10px] text-slate-400">• {msg.time}</span>
             </div>
 
             <div
               className={`p-3.5 rounded-2xl max-w-[85%] sm:max-w-[75%] text-xs sm:text-sm leading-relaxed ${
                 msg.sender === 'user'
-                  ? 'bg-red-500 text-white rounded-tr-none font-medium'
-                  : 'bg-[#181b22] border border-white/5 text-slate-200 rounded-tl-none'
+                  ? 'bg-sky-600 text-white rounded-tr-none font-medium shadow-xs'
+                  : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-none'
               }`}
             >
               {msg.text}
@@ -335,8 +335,8 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
         ))}
 
         {isTyping && (
-          <div className="flex items-center space-x-2 text-slate-400 text-xs font-mono p-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+          <div className="flex items-center space-x-2 text-slate-400 text-xs p-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-600 animate-ping"></span>
             <span>Hospital receptionist replying...</span>
           </div>
         )}
@@ -345,17 +345,17 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
       </div>
 
       {/* INPUT BAR WITH VOICE INPUT */}
-      <div className="flex items-center space-x-2 bg-[#111317] p-2 rounded-xl border border-white/10 focus-within:border-red-500/50">
+      <div className="flex items-center space-x-2 bg-white p-2 rounded-2xl border border-slate-200 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 shadow-xs">
         <button
           onClick={toggleMic}
-          className={`p-2.5 rounded-lg transition-all cursor-pointer ${
+          className={`p-2.5 rounded-xl transition-all cursor-pointer ${
             isMicListening
-              ? 'bg-red-500 text-white animate-pulse'
-              : 'bg-[#181b22] text-slate-400 hover:text-white'
+              ? 'bg-rose-600 text-white animate-pulse'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900'
           }`}
           title="Speak to Receptionist"
         >
-          {isMicListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          {isMicListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-sky-600" />}
         </button>
 
         <input
@@ -366,13 +366,13 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
             if (e.key === 'Enter') handleSendMessage();
           }}
           placeholder="Speak or type symptoms..."
-          className="flex-1 bg-transparent px-2 text-xs sm:text-sm text-white focus:outline-none placeholder-slate-500"
+          className="flex-1 bg-transparent px-2 text-xs sm:text-sm text-slate-900 focus:outline-none placeholder-slate-400"
         />
 
         <button
           onClick={() => handleSendMessage()}
           disabled={isTyping || !inputQuery.trim()}
-          className="py-2.5 px-4 rounded-lg bg-red-500 hover:bg-red-400 disabled:opacity-40 text-white font-mono text-xs font-bold uppercase transition-colors cursor-pointer flex items-center space-x-1.5"
+          className="py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-100 disabled:text-slate-400 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center space-x-1.5 shadow-xs"
         >
           <span>Send</span>
           <Send className="w-3 h-3" />
@@ -380,22 +380,22 @@ export const EmergencyReceptionistAgent: React.FC<EmergencyReceptionistAgentProp
       </div>
 
       {/* Quick Prompts */}
-      <div className="flex flex-wrap gap-1.5 font-mono text-[11px] text-slate-400">
+      <div className="flex flex-wrap gap-1.5 text-xs text-slate-600">
         <button
           onClick={() => handleSendMessage("Patient is unconscious and breathing shallowly")}
-          className="px-2.5 py-1 rounded-md bg-[#14161a] border border-white/5 hover:border-white/20 text-slate-300 hover:text-white"
+          className="px-2.5 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs transition-colors cursor-pointer"
         >
           Unconscious & Shallow Breath
         </button>
         <button
           onClick={() => handleSendMessage("Severe chest pressure and cold sweat")}
-          className="px-2.5 py-1 rounded-md bg-[#14161a] border border-white/5 hover:border-white/20 text-slate-300 hover:text-white"
+          className="px-2.5 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs transition-colors cursor-pointer"
         >
           Chest Pressure & Cold Sweat
         </button>
         <button
           onClick={() => handleSendMessage("How far is the dispatched ambulance?")}
-          className="px-2.5 py-1 rounded-md bg-[#14161a] border border-white/5 hover:border-white/20 text-slate-300 hover:text-white"
+          className="px-2.5 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs transition-colors cursor-pointer"
         >
           Check Ambulance ETA
         </button>

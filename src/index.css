@@ -2,59 +2,61 @@
 
 @layer base {
   :root {
-    --bg-canvas: #090a0c;
-    --bg-surface: #111317;
-    --bg-surface-raised: #181b22;
-    --border-hairline: rgba(255, 255, 255, 0.08);
-    --border-accent: #ff453a;
-    --accent-signal: #ff453a;
-    --accent-amber: #f59e0b;
-    --text-pure: #f8fafc;
-    --text-muted: #94a3b8;
+    --bg-canvas: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-raised: #f1f5f9;
+    --border-hairline: #e2e8f0;
+    --border-accent: #0284c7;
+    --accent-signal: #0284c7;
+    --accent-emergency: #dc2626;
+    --accent-emerald: #059669;
+    --accent-amber: #d97706;
+    --text-pure: #0f172a;
+    --text-muted: #475569;
     --text-dim: #64748b;
   }
 
   body {
-    background-color: #090a0c;
-    color: #f8fafc;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.01em;
   }
 }
 
-/* Minimalist Titanium Scrollbars */
+/* Minimalist Clean Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #090a0c;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e222b;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ff453a;
+  background: #94a3b8;
 }
 
-/* Subtle Physical Pulse Animation */
+/* Reassuring Pulse Animation */
 @keyframes haptic-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
   50% {
-    opacity: 0.85;
+    opacity: 0.92;
     transform: scale(1.02);
   }
 }
 
 .animate-haptic-pulse {
-  animation: haptic-pulse 1.8s ease-in-out infinite;
+  animation: haptic-pulse 2s ease-in-out infinite;
 }

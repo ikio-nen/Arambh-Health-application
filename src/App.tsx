@@ -135,7 +135,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-neutral-100 flex flex-col font-sans selection:bg-red-600 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-sky-100 selection:text-sky-900">
       {/* Top Minimalist Navigation Bar */}
       <Navbar
         activeView={activeView}
@@ -179,7 +179,7 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-x-hidden bg-black pb-12">
+      <main className="flex-1 overflow-x-hidden bg-slate-50 pb-12">
         {/* 1. CORE USP: FAST ADMIT & VOICE-TO-FILL */}
         {activeView === 'fast_admit' && (
           <FastAdmitVoice
@@ -359,20 +359,22 @@ export default function App() {
         )}
       </main>
 
-      {/* High-Contrast Emergency Status Bar */}
-      <footer className="h-9 bg-black border-t border-red-950/80 flex items-center px-4 sm:px-6 justify-between text-[10px] text-neutral-400 uppercase tracking-widest font-mono select-none" id="med-core-footer">
-        <div className="flex items-center space-x-4">
-          <span className="text-red-500 font-bold flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-            FAST ADMIT ZERO-DELAY USP
+      {/* Calm Professional Emergency Status Bar */}
+      <footer className="h-10 bg-white border-t border-slate-200/90 flex items-center px-4 sm:px-6 justify-between text-xs text-slate-600 font-sans select-none shadow-xs" id="med-core-footer">
+        <div className="flex items-center space-x-3 sm:space-x-4">
+          <span className="text-sky-700 font-semibold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Zero-Delay Fast Admit Active
           </span>
-          <span className="hidden sm:inline text-neutral-500">MOTION & FALL DETECTOR ACTIVE</span>
-          <span className="hidden md:inline text-green-400">HIPAA SECURE</span>
+          <span className="hidden sm:inline text-slate-300">•</span>
+          <span className="hidden sm:inline text-slate-500">Motion & Fall Guard Ready</span>
+          <span className="hidden md:inline text-slate-300">•</span>
+          <span className="hidden md:inline text-emerald-700 font-medium">HIPAA Compliant Local Storage</span>
         </div>
-        <div className="flex items-center space-x-3">
-          <span className="text-neutral-400">EMERGENCY HOTLINE 108</span>
-          <span className="text-neutral-700">|</span>
-          <span className="text-red-400 font-bold">RECEPTIONIST ON-CALL</span>
+        <div className="flex items-center space-x-3 text-xs">
+          <span className="text-slate-600 font-medium">Emergency: <strong className="text-rose-600 font-bold">108</strong></span>
+          <span className="text-slate-200">|</span>
+          <span className="text-sky-700 font-medium">Hospital ER Connected</span>
         </div>
       </footer>
 
@@ -388,20 +390,20 @@ export default function App() {
         }}
       />
 
-      {/* Floating Launcher Button */}
+      {/* Floating Medical AI Assistant Launcher */}
       {!isFloatingChatOpen && activeView !== 'ai_chatbot' && (
         <button
           type="button"
           onClick={() => setIsFloatingChatOpen(true)}
-          className="fixed bottom-5 right-5 z-40 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-full shadow-2xl shadow-red-950/90 border-2 border-red-400 flex items-center space-x-2.5 transition-transform hover:scale-105 cursor-pointer"
+          className="fixed bottom-5 right-5 z-40 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-full shadow-lg shadow-sky-900/15 border border-sky-500 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer"
           title="Open AI Receptionist & Triage Assistant"
           id="btn-floating-ai-launcher"
         >
           <div className="relative">
-            <Bot className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+            <Bot className="w-4 h-4 text-white" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
-          <span className="text-xs font-mono font-bold uppercase tracking-wider">AI Receptionist</span>
+          <span className="text-xs font-semibold tracking-wide">Virtual Receptionist</span>
         </button>
       )}
 

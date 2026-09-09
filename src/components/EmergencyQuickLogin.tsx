@@ -46,18 +46,18 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
   };
 
   const containerClasses = isModal 
-    ? "fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md" 
+    ? "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" 
     : "min-h-[85vh] flex items-center justify-center p-4";
 
   return (
     <div className={containerClasses} id="quick-login-container">
-      <div className="w-full max-w-lg bg-[#111317] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
+      <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden text-slate-800">
         {/* Header */}
-        <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-            <span className="font-mono text-xs uppercase tracking-wider text-slate-300">
-              Arambh Health Gateway
+            <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Arambh Health Portal
             </span>
           </div>
           {isModal && onClose && (
@@ -66,104 +66,109 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
                 VibrationService.triggerQuickTap();
                 onClose();
               }}
-              className="text-slate-400 hover:text-white text-xs font-mono px-2 py-1 rounded hover:bg-[#181b22] cursor-pointer"
+              className="text-slate-400 hover:text-slate-700 text-xs font-medium px-2.5 py-1 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
             >
-              Skip
+              Close
             </button>
           )}
         </div>
 
-        {/* Top Emergency Action */}
-        <div className="p-5 border-b border-white/5">
+        {/* Top Emergency Action - Reassuring & Clear */}
+        <div className="p-5 border-b border-slate-100 bg-rose-50/40">
           <button
             id="btn-instant-emergency-sos"
             onClick={() => {
               VibrationService.triggerDispatchSuccess();
               onBypassToEmergency();
             }}
-            className="w-full py-4 px-5 rounded-xl bg-white text-black hover:bg-slate-200 transition-all cursor-pointer shadow-lg flex items-center space-x-3 active:scale-98"
+            className="w-full py-3.5 px-4 rounded-xl bg-white border border-rose-200/80 text-slate-900 hover:bg-rose-50 transition-all cursor-pointer shadow-xs flex items-center space-x-3 active:scale-[0.99]"
           >
-            <Zap className="w-6 h-6 text-red-600 fill-red-600 shrink-0" />
-            <div className="text-left">
-              <div className="font-bold text-sm sm:text-base leading-tight">
-                One-Tap Fast Admit SOS
+            <div className="w-10 h-10 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Zap className="w-5 h-5 fill-white" />
+            </div>
+            <div className="text-left flex-1">
+              <div className="font-semibold text-sm text-slate-900 flex items-center gap-1.5">
+                <span>Immediate Emergency Admission</span>
+                <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">Priority</span>
               </div>
-              <p className="text-xs text-slate-600 font-normal">
-                No login required. Instantly reserve trauma bed & call nearest ambulance.
+              <p className="text-xs text-slate-500">
+                No sign-in required. Instant ER bed triage & nearest hospital dispatch.
               </p>
             </div>
-            <ArrowRight className="w-4 h-4 ml-auto text-black shrink-0" />
+            <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
           </button>
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-white/5 bg-[#0e1014] font-mono text-xs">
-          <button
-            onClick={() => {
-              VibrationService.triggerQuickTap();
-              setTab('emergency');
-            }}
-            className={`flex-1 py-2.5 px-2 text-center uppercase tracking-wider transition-colors cursor-pointer ${
-              tab === 'emergency'
-                ? 'bg-[#14161a] text-white font-semibold border-b-2 border-red-500'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Emergency Overview
-          </button>
-          <button
-            onClick={() => {
-              VibrationService.triggerQuickTap();
-              setTab('patient');
-            }}
-            className={`flex-1 py-2.5 px-2 text-center uppercase tracking-wider transition-colors cursor-pointer ${
-              tab === 'patient'
-                ? 'bg-[#14161a] text-white font-semibold border-b-2 border-red-500'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Patient Sign-In
-          </button>
-          <button
-            onClick={() => {
-              VibrationService.triggerQuickTap();
-              setTab('staff');
-            }}
-            className={`flex-1 py-2.5 px-2 text-center uppercase tracking-wider transition-colors cursor-pointer ${
-              tab === 'staff'
-                ? 'bg-[#14161a] text-white font-semibold border-b-2 border-red-500'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Hospital Staff
-          </button>
+        <div className="px-5 pt-4">
+          <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-medium">
+            <button
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setTab('emergency');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                tab === 'emergency'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setTab('patient');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                tab === 'patient'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Patient Sign-In
+            </button>
+            <button
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setTab('staff');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                tab === 'staff'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Hospital Staff
+            </button>
+          </div>
         </div>
 
         {/* Tab 1: Emergency Details */}
         {tab === 'emergency' && (
           <div className="p-5 space-y-4">
-            <div className="p-4 bg-[#14161a] rounded-xl border border-white/5 space-y-2">
-              <h3 className="font-semibold text-sm text-white">Zero Paperwork Fast Admission</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Hospital admissions typically take 20–40 minutes of bureaucratic intake. Arambh Health pre-allocates an ER trauma bed, parses symptoms via voice recognition, and alerts the receiving emergency physician before you reach the gate.
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+              <h3 className="font-semibold text-sm text-slate-900">Zero Paperwork Fast Admission</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Hospital admissions typically consume critical minutes with paperwork. Arambh Health pre-allocates an emergency trauma bed, parses symptoms via natural voice recognition, and alerts receiving clinicians before arrival.
               </p>
 
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-xs font-mono text-slate-300">
+              <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-200/60 text-xs text-slate-700">
                 <div className="flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Voice Triage</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Voice Triage Assistant</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>GPS Bed Routing</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Real-time Bed Routing</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>AI Receptionist</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>AI Virtual Receptionist</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Fall Motion Sensor</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Offline SMS Emergency Protocol</span>
                 </div>
               </div>
             </div>
@@ -173,10 +178,10 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
                 VibrationService.triggerDispatchSuccess();
                 onBypassToEmergency();
               }}
-              className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-400 text-white font-mono text-xs font-bold uppercase transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold transition-colors flex items-center justify-center space-x-2 cursor-pointer shadow-xs"
             >
               <HeartPulse className="w-4 h-4" />
-              <span>Enter Emergency Mode</span>
+              <span>Go to Emergency Fast Admit</span>
             </button>
           </div>
         )}
@@ -185,43 +190,43 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
         {tab === 'patient' && (
           <form onSubmit={handlePatientSubmit} className="p-5 space-y-3.5">
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase text-slate-400">Patient Full Name</label>
+              <label className="text-xs font-medium text-slate-600">Patient Full Name</label>
               <input
                 type="text"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
                 placeholder="e.g. Anand Varma"
-                className="w-full bg-[#14161a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase text-slate-400">Mobile Phone Number</label>
+              <label className="text-xs font-medium text-slate-600">Mobile Phone Number</label>
               <input
                 type="tel"
                 value={patientPhone}
                 onChange={(e) => setPatientPhone(e.target.value)}
                 placeholder="+91 98201 11223"
-                className="w-full bg-[#14161a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase text-slate-400">Emergency Contact Number</label>
+              <label className="text-xs font-medium text-slate-600">Emergency Contact (Next of Kin)</label>
               <input
                 type="tel"
                 value={emergencyContact}
                 onChange={(e) => setEmergencyContact(e.target.value)}
-                placeholder="+91 98201 44521 (Next of Kin)"
-                className="w-full bg-[#14161a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                placeholder="+91 98201 44521"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
             >
               Sign In to Patient Portal
             </button>
@@ -232,11 +237,11 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
         {tab === 'staff' && (
           <form onSubmit={handleStaffSubmit} className="p-5 space-y-3.5">
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase text-slate-400">Select Clinical Credential</label>
+              <label className="text-xs font-medium text-slate-600">Select Clinical Credential</label>
               <select
                 value={selectedStaffId}
                 onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="w-full bg-[#14161a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
               >
                 {INITIAL_USERS.map(u => (
                   <option key={u.id} value={u.id}>
@@ -246,13 +251,13 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
               </select>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Authorized credentials grant instant access to the Emergency Room Triage Board, Clinical Doctor Case Sheets, and cryptographic audit logs.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Clinical credentials grant direct access to the Emergency Room Triage Board, Doctor Case Sheets, and HIPAA-compliant audit logs.
             </p>
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
             >
               Sign In as Clinical Staff
             </button>

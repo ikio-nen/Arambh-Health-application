@@ -13,6 +13,8 @@ import { aiModelCacheService } from '../services/aiModelCacheService';
 import { VibrationService } from '../services/vibrationService';
 import { SmsEmergencyService } from '../services/smsEmergencyService';
 import { MessageSquare, Send, Copy, Check } from 'lucide-react';
+import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
+import { SmsDispatchModal } from './SmsDispatchModal';
 
 interface FastAdmitVoiceProps {
   isOfflineMode: boolean;
@@ -55,6 +57,7 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   const [admitSuccessCase, setAdmitSuccessCase] = useState<EmergencyCase | null>(null);
   const [showSmsPreview, setShowSmsPreview] = useState<boolean>(false);
   const [smsCopied, setSmsCopied] = useState<boolean>(false);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
 
   // 1. Initialize GPS & Nearby Hospitals
   useEffect(() => {
@@ -280,161 +283,162 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6 text-slate-100" id="fast-admit-view">
+    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6 text-slate-800" id="fast-admit-view">
       {/* SUCCESS BANNER: INSTANT ADMISSION RESERVED */}
       {admitSuccessCase && (
-        <div className="p-5 rounded-2xl bg-[#111317] border border-red-500/50 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+        <div className="p-5 rounded-2xl bg-white border border-emerald-300 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500 text-red-400 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-red-400" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <span className="text-[10px] font-mono text-slate-400 uppercase">
-                  Fast Admit Protocol Dispatched • Case {admitSuccessCase.id}
+                <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">
+                  Emergency Admission Confirmed • Case #{admitSuccessCase.id}
                 </span>
-                <h2 className="text-lg font-bold text-white tracking-tight">
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                   Trauma Bed Reserved & Ambulance Dispatched
                 </h2>
               </div>
             </div>
 
-            <div className="text-right">
-              <span className="text-[10px] font-mono text-slate-500 uppercase">Bed Reservation Token</span>
-              <div className="text-sm font-mono font-bold text-amber-400">{reservationToken}</div>
+            <div className="text-left sm:text-right bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 uppercase font-medium">Bed Token</span>
+              <div className="text-sm font-mono font-bold text-sky-700">{reservationToken}</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-            <div className="p-3 bg-[#181b22] rounded-xl border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Assigned Hospital</span>
-              <span className="text-xs font-semibold text-white block mt-0.5">{admitSuccessCase.assigned_hospital}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <span className="text-slate-500 block text-[11px]">Assigned Hospital</span>
+              <span className="text-xs font-semibold text-slate-900 block mt-0.5">{admitSuccessCase.assigned_hospital}</span>
             </div>
-            <div className="p-3 bg-[#181b22] rounded-xl border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Ambulance Arrival</span>
-              <span className="text-xs font-semibold text-red-400 block mt-0.5">~{admitSuccessCase.eta_minutes} mins ({admitSuccessCase.distance_km} km)</span>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <span className="text-slate-500 block text-[11px]">Ambulance Arrival</span>
+              <span className="text-xs font-semibold text-rose-600 block mt-0.5">~{admitSuccessCase.eta_minutes} mins ({admitSuccessCase.distance_km} km)</span>
             </div>
-            <div className="p-3 bg-[#181b22] rounded-xl border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Triage Protocol</span>
-              <span className="text-xs font-semibold text-amber-400 uppercase block mt-0.5">{admitSuccessCase.triage_tag} priority</span>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <span className="text-slate-500 block text-[11px]">Triage Priority</span>
+              <span className="text-xs font-semibold text-slate-800 uppercase block mt-0.5">{admitSuccessCase.triage_tag} priority</span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2.5 pt-1">
             <button
               onClick={() => onOpenReceptionist && onOpenReceptionist(admitSuccessCase.assigned_hospital, admitSuccessCase)}
-              className="flex-1 py-3 px-4 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
             >
               <PhoneCall className="w-4 h-4" />
-              <span>Talk to Hospital Receptionist</span>
+              <span>Talk to Virtual Receptionist</span>
             </button>
             <a
               href={`tel:${admitSuccessCase.ambulance_phone}`}
-              className="py-3 px-5 rounded-xl bg-[#181b22] hover:bg-[#20242e] text-slate-300 font-mono text-xs uppercase flex items-center justify-center space-x-2 border border-white/10 cursor-pointer"
+              className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center space-x-2 border border-slate-200 cursor-pointer transition-colors"
             >
               <span>Direct Hotline ({admitSuccessCase.ambulance_phone})</span>
             </a>
-            <a
-              href={SmsEmergencyService.buildSmsLaunchUrl(
-                SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER,
-                SmsEmergencyService.encodeEmergencyCase({
-                  lat: admitSuccessCase.lat,
-                  long: admitSuccessCase.long,
-                  age: patientAge || 45,
-                  gender: patientGender,
-                  triageTag: admitSuccessCase.triage_tag,
-                  condition: admitSuccessCase.condition_text,
-                  bedToken: reservationToken || 'BED-RES-108',
-                  targetHospital: admitSuccessCase.assigned_hospital,
-                })
-              )}
-              className="py-3 px-4 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 font-mono text-xs uppercase flex items-center justify-center space-x-1.5 border border-red-500/30 cursor-pointer"
+            <button
+              type="button"
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setIsSmsModalOpen(true);
+              }}
+              className="py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium text-xs flex items-center justify-center space-x-1.5 border border-rose-200 cursor-pointer transition-colors"
             >
-              <MessageSquare className="w-4 h-4 text-red-400" />
-              <span>Offline SMS Backup (108)</span>
-            </a>
+              <MessageSquare className="w-4 h-4 text-rose-600" />
+              <span>Dispatch SMS (108)</span>
+            </button>
+          </div>
+
+          {/* LIVE AMBULANCE DELIVERY APP TRACKER */}
+          <div className="pt-2">
+            <AmbulanceLiveTracker 
+              emergencyCase={admitSuccessCase} 
+              onCallAmbulance={() => {}}
+            />
           </div>
         </div>
       )}
 
-      {/* CORE USP CARD: MINIMALIST TITANIUM */}
-      <div className="bg-[#111317] border border-white/10 rounded-2xl p-5 sm:p-7 shadow-xl space-y-6">
-        {/* Header with high contrast */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
+      {/* CORE USP CARD: MINIMALIST & PROFESSIONAL HEALTHCARE */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-xs space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-                Our USP: Zero-Delay Fast Admit
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span className="text-xs font-semibold text-sky-700 uppercase tracking-wide">
+                Fast Admission Protocol
               </span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
-              Voice-to-Fill Emergency Intake
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
+              Voice Emergency Intake
             </h1>
-            <p className="text-slate-400 text-xs mt-0.5 max-w-xl">
-              Eliminate paper triage delays. Speak or tap to pre-allocate an ER bed and route the nearest ambulance.
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5 max-w-xl leading-relaxed">
+              Eliminate paperwork delays. Speak or select symptoms below to pre-allocate an emergency room bed and route nearest ambulance.
             </p>
           </div>
 
           {/* GPS Status */}
-          <div className="flex items-center space-x-2 bg-[#181b22] px-3 py-1.5 rounded-xl border border-white/5 font-mono text-xs">
-            <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
-            <span className="text-slate-300 truncate max-w-[190px]">{gpsStatus}</span>
+          <div className="flex items-center space-x-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700">
+            <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+            <span className="text-slate-600 truncate max-w-[200px] font-medium">{gpsStatus}</span>
             <button
               onClick={detectLocation}
               disabled={isDetectingGps}
-              className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+              className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer transition-colors"
               title="Refresh GPS"
             >
-              <RefreshCw className={`w-3 h-3 ${isDetectingGps ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* VOICE-TO-FILL SECTION */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 bg-[#14161a] p-4 rounded-xl border border-white/5">
+        <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
           {/* Microphone Button */}
           <button
             id="btn-voice-fill-trigger"
             onClick={toggleListening}
-            className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 transition-all cursor-pointer ${
+            className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 transition-all cursor-pointer shadow-xs ${
               isListening
-                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30'
-                : 'bg-[#1c1f26] text-slate-400 hover:text-white border border-white/10 hover:border-white/20'
+                ? 'bg-rose-600 text-white animate-pulse ring-4 ring-rose-100'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
+            title="Click to activate voice triage"
           >
             {isListening ? (
               <>
                 <MicOff className="w-6 h-6 text-white" />
-                <span className="text-[9px] font-mono mt-0.5 uppercase">Listening</span>
+                <span className="text-[10px] font-semibold mt-0.5">Listening</span>
               </>
             ) : (
               <>
-                <Mic className="w-6 h-6" />
-                <span className="text-[9px] font-mono mt-0.5 uppercase">Speak</span>
+                <Mic className="w-6 h-6 text-sky-600" />
+                <span className="text-[10px] font-semibold mt-0.5 text-slate-700">Tap to Speak</span>
               </>
             )}
           </button>
 
           {/* Transcript / Spoken Waveform Feedback */}
           <div className="flex-1 w-full space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400 flex items-center space-x-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-red-500 animate-ping' : 'bg-slate-600'}`}></span>
-                <span>{isListening ? 'Listening hands-free...' : 'Press to talk'}</span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-600 flex items-center space-x-1.5 font-medium">
+                <span className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`}></span>
+                <span>{isListening ? 'Listening hands-free...' : 'Hands-free voice recognition'}</span>
               </span>
-              <span className="text-slate-500 text-[11px]">
-                Say: "45 years old, chest pain, fast admit"
+              <span className="text-slate-400 text-xs">
+                e.g. "45 years old, chest pain, fast admit"
               </span>
             </div>
 
-            <div className="p-3 bg-[#111317] rounded-lg border border-white/5 min-h-[46px] flex items-center">
+            <div className="p-3 bg-white rounded-xl border border-slate-200 min-h-[46px] flex items-center shadow-xs">
               {transcript ? (
-                <p className="text-white text-xs sm:text-sm font-medium">
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">
                   "{transcript}"
                 </p>
               ) : (
-                <p className="text-slate-500 text-xs italic">
+                <p className="text-slate-400 text-xs">
                   {isListening 
                     ? 'Capturing audio... entity extractor active...' 
                     : 'Tap microphone and describe symptoms. Arambh auto-extracts age, condition, and triage category.'}
@@ -446,24 +450,24 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
 
         {/* QUICK 1-TAP EMERGENCY PRESETS */}
         <div className="space-y-2">
-          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">
-            Instant Triage Presets
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">
+            Common Emergency Symptoms
           </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" id="emergency-presets-grid">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="emergency-presets-grid">
             <button
               type="button"
               onClick={() => applyPreset('cardiac', 'Severe acute chest pain radiating to left arm & cold sweats')}
               className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                 selectedTag === 'cardiac'
-                  ? 'bg-red-500/15 border-red-500/60 text-white'
-                  : 'bg-[#14161a] border-white/5 text-slate-300 hover:border-white/20'
+                  ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-400'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-red-400">Chest Pain</span>
-                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-red-500/20 text-red-400">CARDIAC</span>
+                <span className="text-xs font-bold text-slate-900">Chest Pain</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">Cardiac</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Heart attack / Angina</p>
+              <p className="text-xs text-slate-500 mt-1">Pressure / Pain radiating</p>
             </button>
 
             <button
@@ -471,15 +475,15 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
               onClick={() => applyPreset('trauma', 'Uncontrolled heavy bleeding / deep laceration from accident')}
               className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                 selectedTag === 'trauma' && conditionText.includes('bleeding')
-                  ? 'bg-red-500/15 border-red-500/60 text-white'
-                  : 'bg-[#14161a] border-white/5 text-slate-300 hover:border-white/20'
+                  ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-400'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-red-400">Severe Bleed</span>
-                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-red-500/20 text-red-400">TRAUMA</span>
+                <span className="text-xs font-bold text-slate-900">Severe Bleed</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">Trauma</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Heavy wound / Laceration</p>
+              <p className="text-xs text-slate-500 mt-1">Heavy wound / Laceration</p>
             </button>
 
             <button
@@ -487,15 +491,15 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
               onClick={() => applyPreset('respiratory', 'Severe breathing difficulty / choking / asthma failure')}
               className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                 selectedTag === 'respiratory'
-                  ? 'bg-red-500/15 border-red-500/60 text-white'
-                  : 'bg-[#14161a] border-white/5 text-slate-300 hover:border-white/20'
+                  ? 'bg-sky-50 border-sky-400 ring-1 ring-sky-400'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-red-400">Choking / Airway</span>
-                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-red-500/20 text-red-400">AIRWAY</span>
+                <span className="text-xs font-bold text-slate-900">Breathing Issue</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">Airway</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Asthma / Breathlessness</p>
+              <p className="text-xs text-slate-500 mt-1">Severe breathlessness</p>
             </button>
 
             <button
@@ -503,15 +507,15 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
               onClick={() => applyPreset('trauma', 'Hard fall / head impact with confusion or unconsciousness')}
               className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                 conditionText.includes('fall')
-                  ? 'bg-red-500/15 border-red-500/60 text-white'
-                  : 'bg-[#14161a] border-white/5 text-slate-300 hover:border-white/20'
+                  ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-red-400">Fall / Shock</span>
-                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-red-500/20 text-red-400">IMPACT</span>
+                <span className="text-xs font-bold text-slate-900">Fall / Shock</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">Impact</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Head injury / Collapse</p>
+              <p className="text-xs text-slate-500 mt-1">Head injury / Collapse</p>
             </button>
           </div>
         </div>
@@ -519,30 +523,30 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
         {/* PATIENT DETAILS FIELDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono text-slate-400 uppercase">Patient Name</label>
+            <label className="text-xs font-medium text-slate-600">Patient Full Name</label>
             <input
               type="text"
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
               placeholder="e.g. Rohan Deshmukh"
-              className="w-full bg-[#14161a] border border-white/10 focus:border-white/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-mono text-slate-400 uppercase">Age / Gender</label>
+            <label className="text-xs font-medium text-slate-600">Age & Gender</label>
             <div className="flex space-x-2">
               <input
                 type="number"
                 value={patientAge}
                 onChange={(e) => setPatientAge(e.target.value)}
                 placeholder="Age"
-                className="w-20 bg-[#14161a] border border-white/10 focus:border-white/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                className="w-20 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
               />
               <select
                 value={patientGender}
                 onChange={(e) => setPatientGender(e.target.value as any)}
-                className="flex-1 bg-[#14161a] border border-white/10 focus:border-white/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -552,43 +556,43 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-mono text-slate-400 uppercase">Emergency Contact</label>
+            <label className="text-xs font-medium text-slate-600">Emergency Contact Number</label>
             <input
               type="tel"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               placeholder="+91 98201 44521"
-              className="w-full bg-[#14161a] border border-white/10 focus:border-white/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
             />
           </div>
         </div>
 
         {/* NEAREST BEST HOSPITAL SELECTION */}
         {bestHospital && (
-          <div className="p-4 rounded-xl bg-[#14161a] border border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="p-4 rounded-xl bg-sky-50/50 border border-sky-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold bg-amber-400 text-black uppercase">
-                  RECOMMENDED HOSPITAL
+                <span className="px-2 py-0.5 rounded font-semibold text-[10px] bg-sky-600 text-white uppercase tracking-wide">
+                  Optimal Match
                 </span>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs text-slate-500 font-medium">
                   {bestHospital.distanceKm} km away
                 </span>
               </div>
-              <h3 className="text-base font-bold text-white mt-1">
+              <h3 className="text-base font-bold text-slate-900 mt-1">
                 {bestHospital.hospital.name}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-600 mt-0.5">
                 {bestHospital.recommendationReason}
               </p>
             </div>
 
             <div className="flex items-center space-x-4 shrink-0">
               <div className="text-right">
-                <div className="text-xl font-mono font-bold text-white">
-                  ~{bestHospital.etaMinutes} <span className="text-xs font-normal text-slate-400">MIN</span>
+                <div className="text-xl font-bold text-sky-800">
+                  ~{bestHospital.etaMinutes} <span className="text-xs font-normal text-slate-500">mins</span>
                 </div>
-                <div className="text-[10px] font-mono text-emerald-400">
+                <div className="text-xs font-semibold text-emerald-700">
                   {bestHospital.availableBeds} ER Beds Free
                 </div>
               </div>
@@ -597,7 +601,7 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
                 <button
                   type="button"
                   onClick={onViewHospitals}
-                  className="px-3 py-1.5 rounded-lg bg-[#1c1f26] border border-white/10 hover:border-white/20 text-xs font-mono text-slate-300 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 cursor-pointer shadow-xs transition-colors"
                 >
                   View All
                 </button>
@@ -613,44 +617,44 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
             type="button"
             disabled={isSubmitting}
             onClick={handleTriggerFastAdmit}
-            className="w-full py-4 px-6 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-base uppercase tracking-wider flex items-center justify-center space-x-2.5 transition-all cursor-pointer shadow-lg active:scale-98"
+            className="w-full py-3.5 px-6 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-base flex items-center justify-center space-x-2.5 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
           >
-            <Zap className="w-5 h-5 text-red-600 fill-red-600" />
+            <Zap className="w-5 h-5 fill-white" />
             <span>
               {isSubmitting ? 'Reserving ER Bed...' : 'Fast Admit & Dispatch Ambulance'}
             </span>
             <ArrowRight className="w-4 h-4 ml-auto" />
           </button>
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mt-2 px-1">
-            <span>Pre-allocates trauma bed</span>
-            <span>Hands-free coordinates</span>
-            <span>Zero queue on arrival</span>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 px-1 font-medium">
+            <span>• Pre-allocated trauma bed</span>
+            <span>• Direct emergency line</span>
+            <span>• Zero paperwork on arrival</span>
           </div>
         </div>
 
         {/* OFFLINE SMS EMERGENCY DISPATCH (SIH RESILIENCE PROTOCOL) */}
-        <div className="pt-4 border-t border-white/5 space-y-3">
+        <div className="pt-4 border-t border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <MessageSquare className="w-4 h-4 text-red-400" />
-              <span className="text-xs font-mono font-bold text-white uppercase">
+              <MessageSquare className="w-4 h-4 text-sky-600" />
+              <span className="text-xs font-semibold text-slate-800">
                 Offline SMS Emergency Dispatch (108)
               </span>
             </div>
             <button
               type="button"
               onClick={() => setShowSmsPreview(!showSmsPreview)}
-              className="text-[11px] font-mono text-slate-400 hover:text-white underline cursor-pointer"
+              className="text-xs text-sky-600 hover:text-sky-800 font-medium underline cursor-pointer"
             >
-              {showSmsPreview ? 'Hide GSM String' : 'View GSM String'}
+              {showSmsPreview ? 'Hide Payload' : 'View Payload Details'}
             </button>
           </div>
 
           {showSmsPreview && (
-            <div className="p-3 bg-[#0a0b0e] border border-white/10 rounded-xl space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-500">
                 <span>Compressed GSM 7-Bit Payload:</span>
-                <span className="text-emerald-400">
+                <span className="text-emerald-700 font-medium">
                   {SmsEmergencyService.encodeEmergencyCase({
                     lat,
                     long,
@@ -663,7 +667,7 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
                   }).length}/160 chars (Single SMS)
                 </span>
               </div>
-              <div className="p-2.5 bg-[#14161a] rounded-lg font-mono text-xs text-amber-300 break-all select-all">
+              <div className="p-2.5 bg-white border border-slate-200 rounded-lg font-mono text-xs text-slate-800 break-all select-all">
                 {SmsEmergencyService.encodeEmergencyCase({
                   lat,
                   long,
@@ -694,37 +698,47 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
                     setSmsCopied(true);
                     setTimeout(() => setSmsCopied(false), 2000);
                   }}
-                  className="px-2.5 py-1 rounded bg-[#181b22] hover:bg-[#20242e] text-[11px] font-mono text-slate-300 flex items-center space-x-1 cursor-pointer border border-white/10"
+                  className="px-2.5 py-1 rounded bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center space-x-1 cursor-pointer border border-slate-200 shadow-xs"
                 >
-                  {smsCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{smsCopied ? 'Copied' : 'Copy SMS'}</span>
+                  {smsCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                  <span>{smsCopied ? 'Copied' : 'Copy Payload'}</span>
                 </button>
               </div>
             </div>
           )}
 
-          <a
-            href={SmsEmergencyService.buildSmsLaunchUrl(
-              SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER,
-              SmsEmergencyService.encodeEmergencyCase({
-                lat,
-                long,
-                age: patientAge || 45,
-                gender: patientGender,
-                triageTag: selectedTag,
-                condition: conditionText || 'Emergency Fast Admit',
-                bedToken: reservationToken || 'BED-RES-108',
-                targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
-              })
-            )}
-            onClick={() => VibrationService.triggerDispatchSuccess()}
-            className="w-full py-3 px-4 rounded-xl bg-red-500 hover:bg-red-400 text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-98"
+          <button
+            type="button"
+            onClick={() => {
+              VibrationService.triggerQuickTap();
+              setIsSmsModalOpen(true);
+            }}
+            className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
           >
-            <Send className="w-4 h-4" />
-            <span>Send Emergency SMS Directly to 108 (Works 100% Offline)</span>
-          </a>
+            <Send className="w-4 h-4 text-sky-400" />
+            <span>Open Emergency SMS Dispatch Gateway (108 & Contacts)</span>
+          </button>
         </div>
       </div>
+
+      {/* EMERGENCY SMS DISPATCH MODAL */}
+      <SmsDispatchModal
+        isOpen={isSmsModalOpen}
+        onClose={() => setIsSmsModalOpen(false)}
+        initialMessage={SmsEmergencyService.encodeEmergencyCase({
+          lat,
+          long,
+          age: patientAge || 45,
+          gender: patientGender,
+          triageTag: selectedTag,
+          condition: conditionText || 'Emergency Fast Admit',
+          bedToken: reservationToken || 'BED-RES-108',
+          targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
+        })}
+        initialPhone="108"
+        caseId={admitSuccessCase?.id || 'EMG-ADMIT-108'}
+        targetHospital={bestHospital?.hospital.name || 'Metro Trauma Center'}
+      />
     </div>
   );
 };

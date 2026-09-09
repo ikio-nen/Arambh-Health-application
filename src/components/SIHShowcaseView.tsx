@@ -7,6 +7,7 @@ import {
 import { SmsEmergencyService, DecodedEmergencySms } from '../services/smsEmergencyService';
 import { PWAInstallButton } from './PWAInstallButton';
 import { VibrationService } from '../services/vibrationService';
+import { SmsDispatchModal } from './SmsDispatchModal';
 
 interface SIHShowcaseViewProps {
   isOfflineMode: boolean;
@@ -45,6 +46,7 @@ export const SIHShowcaseView: React.FC<SIHShowcaseViewProps> = ({
 
   const [isSimulatingReceiver, setIsSimulatingReceiver] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
 
   const handleSelectPreset = (index: number) => {
     VibrationService.triggerQuickTap();
@@ -285,15 +287,28 @@ export const SIHShowcaseView: React.FC<SIHShowcaseViewProps> = ({
 
               {/* ACTION BUTTONS */}
               <div className="space-y-2 pt-2">
-                <a
-                  href={SmsEmergencyService.buildSmsLaunchUrl(SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER, generatedSms)}
-                  onClick={() => VibrationService.triggerDispatchSuccess()}
-                  className="w-full py-3.5 px-4 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-98"
-                >
-                  <Send className="w-4 h-4 text-red-600" />
-                  <span>Launch Native SMS to 108</span>
-                  <ArrowRight className="w-3.5 h-3.5 ml-auto" />
-                </a>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href={SmsEmergencyService.buildSmsLaunchUrl(SmsEmergencyService.DEFAULT_EMERGENCY_SMS_NUMBER, generatedSms)}
+                    onClick={() => VibrationService.triggerDispatchSuccess()}
+                    className="py-3 px-3 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                  >
+                    <Send className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Native SMS App</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      VibrationService.triggerQuickTap();
+                      setIsSmsModalOpen(true);
+                    }}
+                    className="py-3 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>SMS Gateway (108)</span>
+                  </button>
+                </div>
 
                 <div className="flex space-x-2">
                   <button
@@ -498,6 +513,16 @@ export const SIHShowcaseView: React.FC<SIHShowcaseViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* EMERGENCY SMS DISPATCH MODAL */}
+      <SmsDispatchModal
+        isOpen={isSmsModalOpen}
+        onClose={() => setIsSmsModalOpen(false)}
+        initialMessage={generatedSms}
+        initialPhone="108"
+        caseId={`SIH-${selectedPreset.tag.toUpperCase()}`}
+        targetHospital={selectedPreset.hospital}
+      />
     </div>
   );
 };

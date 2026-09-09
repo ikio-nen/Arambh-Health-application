@@ -62,98 +62,98 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
   const bestChoice = evaluations.find(e => e.isBestChoice) || evaluations[0];
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6 text-slate-100" id="nearest-hospitals-view">
+    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6 text-slate-800" id="nearest-hospitals-view">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-white/5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-100">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-            <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-              Real-Time Vacancy & ETA Routing
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="text-xs font-semibold text-sky-700 uppercase tracking-wide">
+              Live Facility Vacancy & ETA
             </span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
             Nearest Emergency Facilities
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Ranked by instantaneous ambulance arrival time and live ER trauma bed vacancies.
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Ranked by instantaneous ambulance arrival time and live emergency room trauma bed vacancies.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-[#14161a] px-3 py-1.5 rounded-xl border border-white/5 text-xs font-mono">
-          <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
-          <span className="text-slate-300 truncate max-w-[200px]">{locationStatus}</span>
+        <div className="flex items-center space-x-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700">
+          <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+          <span className="text-slate-600 truncate max-w-[200px] font-medium">{locationStatus}</span>
           <button
             onClick={() => {
               detectLocation();
               VibrationService.triggerQuickTap();
             }}
             disabled={isDetecting}
-            className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
             title="Refresh GPS"
           >
-            <RefreshCw className={`w-3 h-3 ${isDetecting ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isDetecting ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* BEST HOSPITAL FOR YOU */}
       {bestChoice && (
-        <div className="bg-[#111317] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
+        <div className="bg-white border border-sky-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div className="flex items-center space-x-2">
-              <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-amber-400 text-black uppercase flex items-center space-x-1">
-                <Star className="w-3 h-3 fill-black" />
-                <span>RECOMMENDED BEST CHOICE</span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 flex items-center space-x-1.5">
+                <Star className="w-3.5 h-3.5 fill-sky-700 text-sky-700" />
+                <span>Optimal Emergency Match</span>
               </span>
-              <span className="text-xs font-mono text-slate-400">
-                Score: {bestChoice.score}/100
+              <span className="text-xs font-medium text-slate-500">
+                Match Score: {bestChoice.score}/100
               </span>
             </div>
 
             <div className="text-right">
-              <span className="text-[10px] font-mono text-slate-400 uppercase">Ambulance ETA</span>
-              <div className="text-lg font-mono font-bold text-red-400">
-                ~{bestChoice.etaMinutes} MINS
+              <span className="text-xs text-slate-500">Ambulance ETA</span>
+              <div className="text-lg font-bold text-sky-800">
+                ~{bestChoice.etaMinutes} mins
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 space-y-1.5">
-              <h2 className="text-lg font-bold text-white tracking-tight">
+              <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                 {bestChoice.hospital.name}
               </h2>
-              <p className="text-xs text-slate-400 flex items-center space-x-1">
-                <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+              <p className="text-xs text-slate-500 flex items-center space-x-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>{bestChoice.hospital.address}</span>
               </p>
-              <div className="p-3 bg-[#181b22] rounded-xl border border-white/5 mt-2">
-                <span className="text-[10px] font-mono text-amber-400 font-semibold block">
-                  WHY THIS IS YOUR SAFEST OPTION:
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 mt-2">
+                <span className="text-xs font-semibold text-slate-700 block">
+                  Why this facility is recommended:
                 </span>
-                <p className="text-xs text-slate-300 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                   {bestChoice.recommendationReason}
                 </p>
               </div>
             </div>
 
             {/* Quick Metrics */}
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-              <div className="p-3 bg-[#181b22] rounded-xl border border-white/5">
-                <span className="text-[10px] text-slate-400 uppercase block">ER Trauma Beds</span>
-                <span className="text-lg font-bold text-emerald-400 block mt-1">
-                  {bestChoice.availableBeds} VACANT
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                <span className="text-slate-500 block text-[11px]">ER Trauma Beds</span>
+                <span className="text-lg font-bold text-emerald-700 block mt-0.5">
+                  {bestChoice.availableBeds} Vacant
                 </span>
-                <span className="text-[10px] text-slate-500">Zero wait</span>
+                <span className="text-[11px] text-slate-400">Zero wait-time</span>
               </div>
 
-              <div className="p-3 bg-[#181b22] rounded-xl border border-white/5">
-                <span className="text-[10px] text-slate-400 uppercase block">Distance</span>
-                <span className="text-lg font-bold text-white block mt-1">
-                  {bestChoice.distanceKm} KM
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                <span className="text-slate-500 block text-[11px]">Distance</span>
+                <span className="text-lg font-bold text-slate-800 block mt-0.5">
+                  {bestChoice.distanceKm} km
                 </span>
-                <span className="text-[10px] text-slate-500">{bestChoice.hospital.trauma_level}</span>
+                <span className="text-[11px] text-slate-400">{bestChoice.hospital.trauma_level}</span>
               </div>
             </div>
           </div>
@@ -165,9 +165,9 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
                 VibrationService.triggerQuickTap();
                 onSelectHospitalForAdmit(bestChoice);
               }}
-              className="flex-1 py-3 px-4 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              className="flex-1 py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
             >
-              <Zap className="w-4 h-4 text-red-600 fill-red-600" />
+              <Zap className="w-4 h-4 fill-white" />
               <span>Fast Admit to This Hospital</span>
               <ArrowRight className="w-4 h-4 ml-auto" />
             </button>
@@ -177,15 +177,15 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
                 VibrationService.triggerQuickTap();
                 onOpenReceptionist(bestChoice.hospital.name);
               }}
-              className="py-3 px-4 rounded-xl bg-[#181b22] hover:bg-[#20242e] text-white font-mono text-xs uppercase flex items-center justify-center space-x-1.5 border border-white/10 cursor-pointer"
+              className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center space-x-1.5 border border-slate-200 cursor-pointer transition-colors"
             >
-              <PhoneCall className="w-3.5 h-3.5 text-red-400" />
+              <PhoneCall className="w-3.5 h-3.5 text-sky-600" />
               <span>Connect Receptionist</span>
             </button>
 
             <a
               href={`tel:${bestChoice.hospital.ambulance_hotline}`}
-              className="py-3 px-4 rounded-xl bg-[#181b22] hover:bg-[#20242e] text-slate-300 font-mono text-xs uppercase flex items-center justify-center space-x-1.5 border border-white/10 cursor-pointer"
+              className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center space-x-1.5 border border-slate-200 cursor-pointer transition-colors"
             >
               <span>Hotline ({bestChoice.hospital.phone})</span>
             </a>
@@ -195,7 +195,7 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
 
       {/* ALL NEARBY HOSPITALS LIST */}
       <div className="space-y-3">
-        <h2 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+        <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
           Nearby Emergency Centers ({evaluations.length})
         </h2>
 
@@ -203,37 +203,37 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
           {evaluations.map((item) => (
             <div
               key={item.hospital.id}
-              className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
+              className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-white ${
                 item.isBestChoice 
-                  ? 'bg-[#111317] border-red-500/30' 
-                  : 'bg-[#111317] border-white/5 hover:border-white/15'
+                  ? 'border-sky-300 ring-1 ring-sky-200 shadow-xs' 
+                  : 'border-slate-200/90 hover:border-slate-300'
               }`}
             >
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-sm text-white">{item.hospital.name}</h3>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#181b22] text-slate-400">
+                  <h3 className="font-semibold text-sm text-slate-900">{item.hospital.name}</h3>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {item.hospital.trauma_level}
                   </span>
                   {item.isBestChoice && (
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-400 text-black font-bold">
-                      TOP MATCH
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                      Optimal Match
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">{item.hospital.address}</p>
-                <p className="text-[11px] text-slate-500 font-mono">{item.recommendationReason}</p>
+                <p className="text-xs text-slate-500">{item.hospital.address}</p>
+                <p className="text-xs text-slate-600">{item.recommendationReason}</p>
               </div>
 
-              <div className="flex items-center space-x-4 shrink-0 font-mono text-xs">
+              <div className="flex items-center space-x-4 shrink-0 text-xs">
                 <div className="text-right">
-                  <div className="text-white font-bold">~{item.etaMinutes} mins</div>
-                  <div className="text-[10px] text-slate-400">{item.distanceKm} km</div>
+                  <div className="text-slate-900 font-bold">~{item.etaMinutes} mins</div>
+                  <div className="text-xs text-slate-400">{item.distanceKm} km</div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-emerald-400 font-bold">{item.availableBeds} beds</div>
-                  <div className="text-[10px] text-slate-500">Vacant</div>
+                  <div className="text-emerald-700 font-bold">{item.availableBeds} beds</div>
+                  <div className="text-xs text-slate-400">Vacant</div>
                 </div>
 
                 <div className="flex space-x-1.5">
@@ -242,17 +242,17 @@ export const NearestHospitalsView: React.FC<NearestHospitalsViewProps> = ({
                       VibrationService.triggerQuickTap();
                       onSelectHospitalForAdmit(item);
                     }}
-                    className="p-2 rounded-lg bg-white text-black hover:bg-slate-200 transition-colors cursor-pointer"
+                    className="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white transition-colors cursor-pointer shadow-xs"
                     title="Fast Admit to this hospital"
                   >
-                    <Zap className="w-3.5 h-3.5 fill-black" />
+                    <Zap className="w-3.5 h-3.5 fill-white" />
                   </button>
                   <button
                     onClick={() => {
                       VibrationService.triggerQuickTap();
                       onOpenReceptionist(item.hospital.name);
                     }}
-                    className="p-2 rounded-lg bg-[#181b22] text-slate-300 hover:text-white border border-white/5 cursor-pointer"
+                    className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 cursor-pointer transition-colors"
                     title="Call Receptionist"
                   >
                     <PhoneCall className="w-3.5 h-3.5" />

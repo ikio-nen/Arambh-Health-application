@@ -9,6 +9,10 @@ import { LocalClinicalStorage } from '../services/storage';
 import { nearestHospital } from '../services/geo';
 import { secureLocalDB } from '../services/secureLocalDatabase';
 import { VibrationService } from '../services/vibrationService';
+import { SmsEmergencyService } from '../services/smsEmergencyService';
+import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
+import { SmsDispatchModal } from './SmsDispatchModal';
+import { MessageSquare } from 'lucide-react';
 
 interface FallMotionGuardProps {
   isOfflineMode: boolean;
@@ -26,6 +30,8 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
   const [fallDetected, setFallDetected] = useState<boolean>(false);
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15);
   const [alertDispatched, setAlertDispatched] = useState<boolean>(false);
+  const [dispatchedCase, setDispatchedCase] = useState<EmergencyCase | null>(null);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
   const [hapticEnabled, setHapticEnabled] = useState<boolean>(true);
   const [hapticTested, setHapticTested] = useState<boolean>(false);
 
@@ -201,6 +207,22 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
     };
 
     await secureLocalDB.saveEmergencyCase(newCase, isOfflineMode);
+    setDispatchedCase(newCase);
+
+    // Automatically dispatch cellular SMS alert to 108 and emergency contact
+    SmsEmergencyService.dispatchEmergencySms({
+      phoneNumber: contacts[0]?.phone || '108',
+      message: SmsEmergencyService.encodeEmergencyCase({
+        lat: 28.6139,
+        long: 77.2090,
+        triageTag: 'trauma',
+        condition: 'HARD FALL DETECTED (High-g Impact Shock)',
+        bedToken: `BED-RES-${suffix}`,
+        targetHospital: geo.hospital.name,
+      }),
+      caseId: caseId,
+      recipientType: contacts[0]?.phone ? 'EMERGENCY_CONTACT' : 'EMS_CONTROL_ROOM',
+    });
 
     if (onEmergencyTriggered) {
       onEmergencyTriggered(newCase);
@@ -304,7 +326,8 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
 
   const handleSendTestNotification = () => {
     VibrationService.triggerQuickTap();
-    setTestNotificationSent('Test emergency dispatch SMS sent to all registered contacts!');
+    setIsSmsModalOpen(true);
+    setTestNotificationSent('Opening Emergency SMS Dispatcher with test payload...');
     setTimeout(() => setTestNotificationSent(''), 4000);
   };
 
@@ -359,22 +382,37 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
 
       {/* DISPATCH CONFIRMATION */}
       {alertDispatched && (
-        <div className="p-4 rounded-xl bg-[#111317] border border-emerald-500/30 flex items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <div>
-              <h3 className="font-semibold text-sm text-white">Fall Emergency Dispatched</h3>
-              <p className="text-xs text-slate-400">
-                Ambulance routed & emergency contacts messaged with your coordinates.
-              </p>
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-white border border-emerald-300 shadow-xs flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <h3 className="font-semibold text-sm text-slate-900">Fall Emergency Dispatched</h3>
+                <p className="text-xs text-slate-500">
+                  Ambulance routed & emergency contacts messaged with your coordinates.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsSmsModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-semibold border border-sky-200 cursor-pointer"
+              >
+                SMS Gateway
+              </button>
+              <button
+                onClick={() => setAlertDispatched(false)}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => setAlertDispatched(false)}
-            className="px-2.5 py-1 rounded bg-[#181b22] text-xs text-slate-400 hover:text-white"
-          >
-            Dismiss
-          </button>
+
+          {dispatchedCase && (
+            <AmbulanceLiveTracker emergencyCase={dispatchedCase} />
+          )}
         </div>
       )}
 
@@ -642,6 +680,23 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
           ))}
         </div>
       </div>
+
+      {/* EMERGENCY SMS DISPATCH MODAL */}
+      <SmsDispatchModal
+        isOpen={isSmsModalOpen}
+        onClose={() => setIsSmsModalOpen(false)}
+        initialMessage={dispatchedCase ? SmsEmergencyService.encodeEmergencyCase({
+          lat: dispatchedCase.lat,
+          long: dispatchedCase.long,
+          triageTag: dispatchedCase.triage_tag,
+          condition: dispatchedCase.condition_text,
+          bedToken: `BED-RES-${dispatchedCase.id.slice(-4)}`,
+          targetHospital: dispatchedCase.assigned_hospital,
+        }) : 'ARAMBH#SOS|v1|GPS:28.6139,77.2090|P:65M|T:TRM|C:TEST_FALL_ALERT|BED:BED-TEST|H:AIIMS|TM:1200'}
+        initialPhone={contacts[0]?.phone || '108'}
+        caseId={dispatchedCase?.id || 'EMG-FALL-TEST'}
+        targetHospital={dispatchedCase?.assigned_hospital || 'AIIMS Trauma Center'}
+      />
     </div>
   );
 };
