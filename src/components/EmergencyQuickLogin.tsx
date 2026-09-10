@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, PhoneCall, Zap, UserCheck, Stethoscope, 
-  ArrowRight, ShieldCheck, HeartPulse, User, Lock, CheckCircle2 
+  ArrowRight, ShieldCheck, HeartPulse, User, Lock, CheckCircle2, X 
 } from 'lucide-react';
 import { User as SystemUser } from '../types';
 import { INITIAL_USERS } from '../services/storage';
@@ -28,6 +28,18 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
   const [emergencyContact, setEmergencyContact] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('usr-1');
 
+  // Handle ESC key to dismiss modal
+  useEffect(() => {
+    if (!isModal || !onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModal, onClose]);
+
   const handlePatientSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     VibrationService.triggerQuickTap();
@@ -50,8 +62,17 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
     : "min-h-[85vh] flex items-center justify-center p-4";
 
   return (
-    <div className={containerClasses} id="quick-login-container">
-      <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden text-slate-800">
+    <div 
+      className={containerClasses} 
+      id="quick-login-container"
+      onClick={(e) => {
+        if (isModal && onClose && e.target === e.currentTarget) {
+          VibrationService.triggerQuickTap();
+          onClose();
+        }
+      }}
+    >
+      <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -62,13 +83,15 @@ export const EmergencyQuickLogin: React.FC<EmergencyQuickLoginProps> = ({
           </div>
           {isModal && onClose && (
             <button 
+              type="button"
               onClick={() => {
                 VibrationService.triggerQuickTap();
                 onClose();
               }}
-              className="text-slate-400 hover:text-slate-700 text-xs font-medium px-2.5 py-1 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+              className="text-slate-400 hover:text-slate-700 text-xs font-medium px-2.5 py-1 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors flex items-center space-x-1"
             >
-              Close
+              <span>Close</span>
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>

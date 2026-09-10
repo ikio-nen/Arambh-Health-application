@@ -3,7 +3,8 @@ import {
   PhoneCall, MessageSquare, Navigation, ShieldCheck, 
   Clock, AlertTriangle, Volume2, VolumeX, Maximize2, Minimize2,
   RefreshCw, CheckCircle2, ChevronRight, Zap, Radio, MapPin,
-  Heart, FastForward, Play, Pause
+  Heart, FastForward, Play, Pause, ZoomIn, ZoomOut, RotateCcw,
+  Compass, Crosshair, Move
 } from 'lucide-react';
 import { EmergencyCase } from '../types';
 import { calculateDistanceKm } from '../services/geo';
@@ -88,6 +89,13 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
   const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
   const [mapFocus, setMapFocus] = useState<'all' | 'ambulance' | 'patient'>('all');
   const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
+
+  // Map Interactive Zoom & Pan states
+  const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragOriginRef = useRef<{ mouseX: number; mouseY: number; panX: number; panY: number } | null>(null);
+  const mapViewportRef = useRef<HTMLDivElement | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sirenOscillatorRef = useRef<OscillatorNode | null>(null);
@@ -227,9 +235,108 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
     return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
   }, '');
 
+  // Zoom & Pan handlers
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(3.5, Math.round((prev + 0.25) * 100) / 100));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(0.6, Math.round((prev - 0.25) * 100) / 100));
+  };
+
+  const handleResetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setMapFocus('all');
+  };
+
+  const handleFocusTarget = (target: 'all' | 'ambulance' | 'patient') => {
+    setMapFocus(target);
+    if (target === 'ambulance') {
+      setZoom(1.9);
+      setPan({ x: ambulancePt.x - 300, y: ambulancePt.y - 200 });
+    } else if (target === 'patient') {
+      setZoom(2.1);
+      setPan({ x: patientPt.x - 300, y: patientPt.y - 200 });
+    } else {
+      setZoom(1.0);
+      setPan({ x: 0, y: 0 });
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    setZoom(prev => Math.min(3.5, Math.max(0.6, Math.round((prev + delta) * 100) / 100)));
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    dragOriginRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      panX: pan.x,
+      panY: pan.y
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !dragOriginRef.current || !mapViewportRef.current) return;
+    const rect = mapViewportRef.current.getBoundingClientRect();
+    const scaleX = (600 / zoom) / rect.width;
+    const scaleY = (400 / zoom) / rect.height;
+    const deltaX = (e.clientX - dragOriginRef.current.mouseX) * scaleX;
+    const deltaY = (e.clientY - dragOriginRef.current.mouseY) * scaleY;
+    setPan({
+      x: dragOriginRef.current.panX - deltaX,
+      y: dragOriginRef.current.panY - deltaY
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    dragOriginRef.current = null;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      dragOriginRef.current = {
+        mouseX: e.touches[0].clientX,
+        mouseY: e.touches[0].clientY,
+        panX: pan.x,
+        panY: pan.y
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !dragOriginRef.current || !mapViewportRef.current || e.touches.length !== 1) return;
+    const rect = mapViewportRef.current.getBoundingClientRect();
+    const scaleX = (600 / zoom) / rect.width;
+    const scaleY = (400 / zoom) / rect.height;
+    const deltaX = (e.touches[0].clientX - dragOriginRef.current.mouseX) * scaleX;
+    const deltaY = (e.touches[0].clientY - dragOriginRef.current.mouseY) * scaleY;
+    setPan({
+      x: dragOriginRef.current.panX - deltaX,
+      y: dragOriginRef.current.panY - deltaY
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    dragOriginRef.current = null;
+  };
+
+  // ViewBox dynamic calculation
+  const vbWidth = 600 / zoom;
+  const vbHeight = 400 / zoom;
+  const vbMinX = (300 + pan.x) - vbWidth / 2;
+  const vbMinY = (200 + pan.y) - vbHeight / 2;
+  const computedViewBox = `${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`;
+
   return (
     <div className={`w-full bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden transition-all duration-300 ${
-      isMapExpanded ? 'fixed inset-4 z-50 max-w-6xl mx-auto my-auto h-[92vh] flex flex-col' : 'max-w-4xl mx-auto'
+      isMapExpanded ? 'fixed inset-2 sm:inset-4 lg:inset-8 z-50 max-w-6xl mx-auto my-auto h-[92vh] flex flex-col' : 'max-w-5xl xl:max-w-6xl mx-auto'
     }`} id="ambulance-live-tracker">
 
       {/* TOP HEADER: DELIVERY APP STYLE STATUS */}
@@ -414,12 +521,25 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
       </div>
 
       {/* INTERACTIVE DELIVERY MAP VIEWPORT */}
-      <div className={`relative w-full bg-slate-900 overflow-hidden ${isMapExpanded ? 'flex-1 min-h-[400px]' : 'h-[360px] sm:h-[420px]'}`}>
+      <div 
+        ref={mapViewportRef}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`relative w-full bg-slate-900 overflow-hidden select-none cursor-grab active:cursor-grabbing touch-none ${
+          isMapExpanded ? 'flex-1 min-h-[400px]' : 'h-[360px] sm:h-[430px]'
+        }`}
+      >
         
         {/* SVG Road Map Layout */}
         <svg 
-          viewBox="0 0 600 400" 
-          className="w-full h-full object-cover select-none"
+          viewBox={computedViewBox} 
+          className="w-full h-full object-cover pointer-events-none"
           preserveAspectRatio="xMidYMid slice"
         >
           <defs>
@@ -437,8 +557,8 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
           </defs>
 
           {/* Dark Map Canvas Base */}
-          <rect width="600" height="400" fill="#090d16" />
-          <rect width="600" height="400" fill="url(#roadGrid)" opacity="0.75" />
+          <rect x="-1000" y="-1000" width="2600" height="2400" fill="#090d16" />
+          <rect x="-1000" y="-1000" width="2600" height="2400" fill="url(#roadGrid)" opacity="0.75" />
 
           {/* Simulated City Geography: Park Area */}
           <path 
@@ -452,7 +572,7 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
 
           {/* Simulated City Geography: River / Canal */}
           <path 
-            d="M 520 0 Q 480 180 560 400" 
+            d="M 520 -400 Q 480 180 560 800" 
             fill="none" 
             stroke="#0369a1" 
             strokeWidth="14" 
@@ -460,12 +580,12 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
           />
 
           {/* Major City Arterial Roads */}
-          <path d="M 0 120 Q 250 140 600 110" fill="none" stroke="#334155" strokeWidth="9" />
-          <path d="M 0 120 Q 250 140 600 110" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="6,6" />
+          <path d="M -400 120 Q 250 140 1000 110" fill="none" stroke="#334155" strokeWidth="9" />
+          <path d="M -400 120 Q 250 140 1000 110" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="6,6" />
 
-          <path d="M 120 0 L 120 400" fill="none" stroke="#334155" strokeWidth="7" />
-          <path d="M 440 0 L 440 400" fill="none" stroke="#334155" strokeWidth="7" />
-          <path d="M 0 280 L 600 280" fill="none" stroke="#334155" strokeWidth="8" />
+          <path d="M 120 -400 L 120 800" fill="none" stroke="#334155" strokeWidth="7" />
+          <path d="M 440 -400 L 440 800" fill="none" stroke="#334155" strokeWidth="7" />
+          <path d="M -400 280 L 1000 280" fill="none" stroke="#334155" strokeWidth="8" />
 
           {/* Street Name Labels on Map */}
           <text x="140" y="115" fill="#94a3b8" fontSize="9" fontWeight="600" letterSpacing="0.5">
@@ -506,7 +626,7 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
             strokeWidth="2.5" 
             strokeDasharray="8,10" 
             strokeLinecap="round" 
-            className="animate-[dash_1s_linear_infinite]"
+            className="animate-[dash_1s_linear_infinite]" 
           />
 
           {/* ORIGIN: HOSPITAL PIN */}
@@ -579,37 +699,101 @@ export const AmbulanceLiveTracker: React.FC<AmbulanceLiveTrackerProps> = ({
           </g>
         </svg>
 
-        {/* Floating Map Status Overlay (Corner) */}
-        <div className="absolute top-3 left-3 bg-slate-900/85 backdrop-blur-xs border border-slate-700/60 rounded-xl px-3 py-1.5 text-white flex items-center space-x-2 shadow-md">
+        {/* Floating Map Status Overlay (Top Left) */}
+        <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md border border-slate-700/70 rounded-xl px-3 py-1.5 text-white flex items-center space-x-2 shadow-lg pointer-events-auto">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-[11px] font-mono tracking-wide text-slate-200">
             GPS FIX: ±2.4m • 4G LTE TELEMETRY
           </span>
         </div>
 
-        {/* Map Center Quick Focus Buttons */}
-        <div className="absolute bottom-3 right-3 flex items-center space-x-1.5 bg-slate-900/85 backdrop-blur-xs border border-slate-700/60 p-1 rounded-xl shadow-md">
+        {/* INTERACTIVE ZOOM & MAP CONTROLS (Top Right) */}
+        <div className="absolute top-3 right-3 flex flex-col items-center space-y-1.5 bg-slate-900/90 backdrop-blur-md border border-slate-700/70 p-1.5 rounded-xl shadow-lg pointer-events-auto z-10">
           <button
             type="button"
-            onClick={() => setMapFocus('ambulance')}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer transition-colors"
+            onClick={handleZoomIn}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors cursor-pointer"
+            title="Zoom In (+)"
+            id="btn-map-zoom-in"
           >
-            Ambulance
+            <ZoomIn className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResetView}
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            title="Click to Reset Zoom (100%)"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors cursor-pointer"
+            title="Zoom Out (-)"
+            id="btn-map-zoom-out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+
+          <div className="w-5 h-px bg-slate-700 my-0.5"></div>
+
+          <button
+            type="button"
+            onClick={handleResetView}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            title="Recenter Map View"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsMapExpanded(!isMapExpanded)}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            title={isMapExpanded ? "Minimize Map" : "Maximize Full View"}
+          >
+            {isMapExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* Map Center Quick Focus Buttons (Bottom Right) */}
+        <div className="absolute bottom-3 right-3 flex items-center space-x-1.5 bg-slate-900/90 backdrop-blur-md border border-slate-700/70 p-1.5 rounded-xl shadow-lg pointer-events-auto z-10">
+          <button
+            type="button"
+            onClick={() => handleFocusTarget('ambulance')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              mapFocus === 'ambulance' ? 'bg-sky-600 text-white font-semibold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            🚑 Ambulance
           </button>
           <button
             type="button"
-            onClick={() => setMapFocus('patient')}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer transition-colors"
+            onClick={() => handleFocusTarget('patient')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              mapFocus === 'patient' ? 'bg-rose-600 text-white font-semibold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
           >
-            You
+            📍 Scene
           </button>
           <button
             type="button"
-            onClick={() => setMapFocus('all')}
-            className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium cursor-pointer transition-colors"
+            onClick={() => handleFocusTarget('all')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              mapFocus === 'all' ? 'bg-sky-600 text-white font-semibold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
           >
-            Full Route
+            Full Corridor
           </button>
+        </div>
+
+        {/* Subtle pan/zoom guidance prompt (Bottom Left) */}
+        <div className="absolute bottom-3 left-3 hidden sm:flex items-center space-x-1.5 text-[10px] text-slate-400 bg-slate-950/60 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-800/60 pointer-events-none">
+          <Move className="w-3 h-3 text-slate-400" />
+          <span>Click & drag to pan • Scroll / pinch to zoom</span>
         </div>
 
       </div>

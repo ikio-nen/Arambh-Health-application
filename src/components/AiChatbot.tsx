@@ -80,8 +80,8 @@ export const AiChatbot: React.FC<AiChatbotProps> = ({
   }
 
   const containerClass = isFloating
-    ? 'fixed bottom-5 right-5 z-50 w-full max-w-[420px] h-[580px] bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200'
-    : 'w-full max-w-4xl mx-auto h-[calc(100vh-140px)] min-h-[600px] bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col overflow-hidden my-4';
+    ? 'fixed bottom-16 sm:bottom-5 right-2 sm:right-5 z-50 w-[calc(100vw-1rem)] sm:w-[400px] max-w-[420px] h-[75vh] sm:h-[580px] max-h-[calc(100vh-5rem)] bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200'
+    : 'w-full max-w-4xl mx-auto h-[calc(100vh-140px)] min-h-[520px] bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col overflow-hidden my-4';
 
   return (
     <div className={containerClass} id="ai-chatbot-panel">
