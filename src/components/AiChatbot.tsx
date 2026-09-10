@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Bot, Send, Sparkles, Volume2, VolumeX, Copy, Check, 
   Trash2, AlertTriangle, Heart, ShieldAlert, Radio, X, 
-  Maximize2, Minimize2, ExternalLink, RefreshCw
+  Maximize2, Minimize2, ExternalLink, RefreshCw, Mic, MicOff
 } from 'lucide-react';
 import { aiChatService, ChatMessage, QUICK_EMERGENCY_PROMPTS } from '../services/aiChatService';
+import { VoiceEmergencyService } from '../services/voiceService';
 
 interface AiChatbotProps {
   isOfflineMode: boolean;
@@ -26,7 +27,47 @@ export const AiChatbot: React.FC<AiChatbotProps> = ({
   const [isSending, setIsSending] = useState<boolean>(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Clean up voice on unmount
+  useEffect(() => {
+    return () => {
+      if (isVoiceListening) {
+        VoiceEmergencyService.stopListening();
+      }
+    };
+  }, [isVoiceListening]);
+
+  const toggleVoiceInput = async () => {
+    if (isVoiceListening) {
+      VoiceEmergencyService.stopListening();
+      setIsVoiceListening(false);
+      return;
+    }
+
+    setIsVoiceListening(true);
+    const started = await VoiceEmergencyService.startListening({
+      onStart: () => setIsVoiceListening(true),
+      onInterim: (interim, full) => {
+        setInputQuery(full);
+      },
+      onResult: (fullText) => {
+        setInputQuery(fullText);
+      },
+      onError: (err) => {
+        console.warn('Chatbot voice err:', err);
+        setIsVoiceListening(false);
+      },
+      onEnd: () => {
+        setIsVoiceListening(false);
+      },
+    });
+
+    if (!started) {
+      setIsVoiceListening(false);
+    }
+  };
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -247,12 +288,27 @@ export const AiChatbot: React.FC<AiChatbotProps> = ({
         }}
         className="p-3 bg-white border-t border-slate-200 flex items-center space-x-2"
       >
+        <button
+          type="button"
+          onClick={toggleVoiceInput}
+          className={`p-2.5 rounded-xl transition-all cursor-pointer flex-shrink-0 border ${
+            isVoiceListening
+              ? 'bg-rose-600 text-white border-rose-700 animate-pulse ring-2 ring-rose-200 shadow-xs'
+              : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+          }`}
+          title={isVoiceListening ? 'Stop voice input' : 'Speak to AI Medical Assistant'}
+        >
+          {isVoiceListening ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-slate-700" />}
+        </button>
+
         <input
           type="text"
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
-          placeholder="Ask medical first-aid (e.g. 'How to help someone choking')..."
-          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+          placeholder={isVoiceListening ? "Listening... speak medical question now" : "Ask medical first-aid (or tap mic to speak)..."}
+          className={`flex-1 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all ${
+            isVoiceListening ? 'bg-rose-50/50 border-rose-300 ring-1 ring-rose-200' : 'bg-slate-50 border-slate-200'
+          }`}
         />
 
         <button

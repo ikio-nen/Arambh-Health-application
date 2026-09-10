@@ -12,7 +12,8 @@ import { LocalClinicalStorage } from '../services/storage';
 import { aiModelCacheService } from '../services/aiModelCacheService';
 import { VibrationService } from '../services/vibrationService';
 import { SmsEmergencyService } from '../services/smsEmergencyService';
-import { MessageSquare, Send, Copy, Check } from 'lucide-react';
+import { VoiceEmergencyService, ExtractedVoiceEntities } from '../services/voiceService';
+import { MessageSquare, Send, Copy, Check, Sparkles, XCircle } from 'lucide-react';
 import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
 import { SmsDispatchModal } from './SmsDispatchModal';
 
@@ -21,6 +22,8 @@ interface FastAdmitVoiceProps {
   onCaseCreated?: (newCase: EmergencyCase) => void;
   onOpenAiAssistant?: () => void;
   onViewHospitals?: () => void;
+  initialSelectedHospital?: HospitalEvaluation | null;
+  initialCondition?: string;
 }
 
 export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
@@ -28,12 +31,17 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   onCaseCreated,
   onOpenAiAssistant,
   onViewHospitals,
+  initialSelectedHospital,
+  initialCondition,
 }) => {
   // Voice input state
   const [isListening, setIsListening] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>('');
-  const [speechSupported, setSpeechSupported] = useState<boolean>(true);
-  const recognitionRef = useRef<any>(null);
+  const [interimSpeech, setInterimSpeech] = useState<string>('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [matchedKeywords, setMatchedKeywords] = useState<string[]>(['Chest Pain', 'Cardiac Triage']);
+  const [speechSupported, setSpeechSupported] = useState<boolean>(VoiceEmergencyService.isSupported());
+  const [isSimulating, setIsSimulating] = useState<boolean>(false);
 
   // Form Fields (voice-to-fill)
   const [patientName, setPatientName] = useState<string>('');
@@ -58,6 +66,29 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   const [showSmsPreview, setShowSmsPreview] = useState<boolean>(false);
   const [smsCopied, setSmsCopied] = useState<boolean>(false);
   const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
+
+  // Handle incoming props from Bed Radar or AI Chatbot
+  useEffect(() => {
+    if (initialCondition) {
+      setConditionText(initialCondition);
+      const parsed = VoiceEmergencyService.parseEmergencyEntities(initialCondition);
+      if (parsed.triageTag) setSelectedTag(parsed.triageTag);
+      if (parsed.matchedKeywords.length > 0) setMatchedKeywords(parsed.matchedKeywords);
+    }
+  }, [initialCondition]);
+
+  useEffect(() => {
+    if (initialSelectedHospital) {
+      setBestHospital(initialSelectedHospital);
+    }
+  }, [initialSelectedHospital]);
+
+  // Clean up voice listener on unmount
+  useEffect(() => {
+    return () => {
+      VoiceEmergencyService.stopListening();
+    };
+  }, []);
 
   // 1. Initialize GPS & Nearby Hospitals
   useEffect(() => {
@@ -94,109 +125,108 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   const updateHospitalRankings = (uLat: number, uLong: number) => {
     const ranked = rankAllHospitals(uLat, uLong);
     setHospitals(ranked);
-    if (ranked.length > 0) {
+    if (ranked.length > 0 && !bestHospital) {
       setBestHospital(ranked[0]);
     }
   };
 
-  // 2. Web Speech Recognition for Voice-to-Fill
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
+  // 2. High-Resilience Voice Listening via VoiceEmergencyService
+  const toggleListening = async () => {
+    VibrationService.triggerQuickTap();
+    setVoiceError(null);
+
+    if (isListening) {
+      VoiceEmergencyService.stopListening();
+      setIsListening(false);
+      setInterimSpeech('');
       return;
     }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    setTranscript('');
+    setInterimSpeech('');
+    setIsListening(true);
 
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentTranscript += event.results[i][0].transcript;
+    const started = await VoiceEmergencyService.startListening({
+      onStart: () => {
+        setIsListening(true);
+        setVoiceError(null);
+      },
+      onInterim: (interim, full) => {
+        setInterimSpeech(interim);
+        setTranscript(full);
+      },
+      onResult: (fullText, entities) => {
+        setTranscript(fullText);
+        setInterimSpeech('');
+        applyExtractedEntities(entities, fullText);
+      },
+      onError: (errMsg, isFatal, code) => {
+        console.warn('Voice recognition notice:', errMsg, code);
+        setVoiceError(errMsg);
+        if (isFatal) {
+          setIsListening(false);
         }
-        setTranscript(currentTranscript);
-        parseVoiceEntities(currentTranscript);
-      };
-
-      recognition.onerror = (err: any) => {
-        console.warn('Speech recognition error:', err);
+      },
+      onEnd: () => {
         setIsListening(false);
-      };
+        setInterimSpeech('');
+      },
+    });
 
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-    } catch (e) {
-      setSpeechSupported(false);
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, []);
-
-  const toggleListening = () => {
-    VibrationService.triggerQuickTap();
-    if (isListening) {
-      if (recognitionRef.current) recognitionRef.current.stop();
+    if (!started) {
       setIsListening(false);
-    } else {
-      if (recognitionRef.current) {
-        setTranscript('');
-        try {
-          recognitionRef.current.start();
-          setIsListening(true);
-        } catch (e) {
-          console.warn('Start listening error:', e);
-        }
-      }
     }
   };
 
-  // 3. Entity Extraction from Voice
-  const parseVoiceEntities = (text: string) => {
-    const lower = text.toLowerCase();
-
-    // Extract Age
-    const ageMatch = lower.match(/(?:i am|he is|she is|patient is|age|aged)?\s*(\d{1,2})\s*(?:years|yr|years old|yo)/);
-    if (ageMatch && ageMatch[1]) {
-      setPatientAge(ageMatch[1]);
+  // Apply parsed entity fields to form
+  const applyExtractedEntities = (entities: ExtractedVoiceEntities, fullText: string) => {
+    if (entities.name) {
+      setPatientName(entities.name);
     }
-
-    // Extract Gender
-    if (lower.includes('female') || lower.includes('woman') || lower.includes('girl') || lower.includes('mother') || lower.includes('she')) {
-      setPatientGender('Female');
-    } else if (lower.includes('male') || lower.includes('man') || lower.includes('boy') || lower.includes('father') || lower.includes('he')) {
-      setPatientGender('Male');
+    if (entities.age) {
+      setPatientAge(entities.age);
     }
-
-    // Extract Name
-    const nameMatch = lower.match(/(?:my name is|name is|patient name|call me)\s+([a-zA-Z\s]+?)(?:i am|and|age|having|with|$)/);
-    if (nameMatch && nameMatch[1]) {
-      setPatientName(nameMatch[1].trim());
+    if (entities.gender) {
+      setPatientGender(entities.gender);
     }
-
-    // Extract Condition & Triage Category
-    if (lower.includes('chest') || lower.includes('heart') || lower.includes('cardiac') || lower.includes('attack') || lower.includes('angina')) {
-      setSelectedTag('cardiac');
-      setConditionText(text);
-    } else if (lower.includes('bleed') || lower.includes('blood') || lower.includes('fracture') || lower.includes('accident') || lower.includes('trauma') || lower.includes('cut')) {
-      setSelectedTag('trauma');
-      setConditionText(text);
-    } else if (lower.includes('breath') || lower.includes('choking') || lower.includes('asthma') || lower.includes('oxygen') || lower.includes('gasping')) {
-      setSelectedTag('respiratory');
-      setConditionText(text);
-    } else {
-      setConditionText(text);
+    if (entities.phone) {
+      setContactPhone(entities.phone);
     }
+    if (entities.triageTag) {
+      setSelectedTag(entities.triageTag);
+    }
+    if (entities.matchedKeywords && entities.matchedKeywords.length > 0) {
+      setMatchedKeywords(entities.matchedKeywords);
+    }
+    if (fullText.trim()) {
+      setConditionText(fullText.trim());
+    }
+  };
+
+  // 1-Tap Voice Simulation for instantaneous zero-hardware testing
+  const runVoiceSimulation = (phrase: string) => {
+    VibrationService.triggerQuickTap();
+    setIsSimulating(true);
+    setVoiceError(null);
+    setTranscript('');
+    setInterimSpeech('');
+    setIsListening(false);
+    VoiceEmergencyService.stopListening();
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      currentIndex += 4;
+      if (currentIndex >= phrase.length) {
+        clearInterval(interval);
+        setTranscript(phrase);
+        setIsSimulating(false);
+        const parsed = VoiceEmergencyService.parseEmergencyEntities(phrase);
+        applyExtractedEntities(parsed, phrase);
+        VibrationService.triggerDispatchSuccess();
+      } else {
+        setTranscript(phrase.slice(0, currentIndex));
+      }
+    }, 40);
   };
 
   // Apply Quick Preset
@@ -416,56 +446,180 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
           </div>
         </div>
 
-        {/* VOICE-TO-FILL SECTION */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-          {/* Microphone Button */}
-          <button
-            id="btn-voice-fill-trigger"
-            onClick={toggleListening}
-            className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 transition-all cursor-pointer shadow-xs ${
-              isListening
-                ? 'bg-rose-600 text-white animate-pulse ring-4 ring-rose-100'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
-            }`}
-            title="Click to activate voice triage"
-          >
-            {isListening ? (
-              <>
-                <MicOff className="w-6 h-6 text-white" />
-                <span className="text-[10px] font-semibold mt-0.5">Listening</span>
-              </>
-            ) : (
-              <>
-                <Mic className="w-6 h-6 text-sky-600" />
-                <span className="text-[10px] font-semibold mt-0.5 text-slate-700">Tap to Speak</span>
-              </>
-            )}
-          </button>
-
-          {/* Transcript / Spoken Waveform Feedback */}
-          <div className="flex-1 w-full space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-600 flex items-center space-x-1.5 font-medium">
-                <span className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`}></span>
-                <span>{isListening ? 'Listening hands-free...' : 'Hands-free voice recognition'}</span>
-              </span>
-              <span className="text-slate-400 text-xs">
-                e.g. "45 years old, chest pain, fast admit"
-              </span>
+        {/* VOICE ERROR BANNER */}
+        {voiceError && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start justify-between gap-3 text-xs text-amber-800 animate-in fade-in duration-200">
+            <div className="flex items-start space-x-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-900">Voice Input Advisory</p>
+                <p className="text-amber-700 mt-0.5 leading-relaxed">{voiceError}</p>
+                <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                  Tip: You can use the <strong>1-Tap Voice Simulation chips</strong> below to immediately experience the voice triage intake without microphone hardware!
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setVoiceError(null)}
+              className="p-1 text-amber-500 hover:text-amber-800 rounded-md cursor-pointer transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-            <div className="p-3 bg-white rounded-xl border border-slate-200 min-h-[46px] flex items-center shadow-xs">
-              {transcript ? (
-                <p className="text-slate-900 text-xs sm:text-sm font-medium">
-                  "{transcript}"
-                </p>
+        {/* VOICE-TO-FILL SECTION */}
+        <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3.5">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Microphone Button */}
+            <button
+              id="btn-voice-fill-trigger"
+              type="button"
+              onClick={toggleListening}
+              className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isListening
+                  ? 'bg-rose-600 text-white ring-4 ring-rose-200 shadow-md'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+              }`}
+              title="Click to activate hands-free emergency voice triage"
+            >
+              {isListening ? (
+                <>
+                  <MicOff className="w-6 h-6 text-white animate-pulse" />
+                  <span className="text-[9px] font-bold mt-0.5 tracking-tight uppercase">Stop</span>
+                </>
               ) : (
-                <p className="text-slate-400 text-xs">
-                  {isListening 
-                    ? 'Capturing audio... entity extractor active...' 
-                    : 'Tap microphone and describe symptoms. Arambh auto-extracts age, condition, and triage category.'}
-                </p>
+                <>
+                  <Mic className="w-6 h-6 text-sky-600" />
+                  <span className="text-[9px] font-bold mt-0.5 text-slate-700 tracking-tight uppercase">Speak</span>
+                </>
               )}
+            </button>
+
+            {/* Transcript / Spoken Waveform Feedback */}
+            <div className="flex-1 w-full space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    isListening ? 'bg-rose-500 animate-ping' : isSimulating ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+                  }`}></span>
+                  <span className="font-semibold text-slate-700">
+                    {isListening 
+                      ? 'Listening hands-free (Speak symptoms, age, name)...' 
+                      : isSimulating 
+                        ? 'Simulating voice stream intake...' 
+                        : 'Hands-Free Voice Recognition & Auto-Triage'}
+                  </span>
+                </div>
+
+                {/* Animated Audio Equalizer Bars when listening */}
+                {isListening && (
+                  <div className="flex items-center space-x-0.5 h-3">
+                    <span className="w-1 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.4s] h-3"></span>
+                    <span className="w-1 bg-rose-600 rounded-full animate-bounce [animation-delay:-0.2s] h-4"></span>
+                    <span className="w-1 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.5s] h-2"></span>
+                    <span className="w-1 bg-rose-600 rounded-full animate-bounce [animation-delay:-0.1s] h-4"></span>
+                    <span className="w-1 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.3s] h-2.5"></span>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3.5 bg-white rounded-xl border border-slate-200 min-h-[52px] flex flex-col justify-center shadow-xs">
+                {transcript || interimSpeech ? (
+                  <p className="text-slate-900 text-xs sm:text-sm font-medium leading-relaxed">
+                    "{transcript} {interimSpeech ? <span className="text-sky-600 italic animate-pulse">{interimSpeech}</span> : ''}"
+                  </p>
+                ) : (
+                  <p className="text-slate-400 text-xs flex items-center justify-between">
+                    <span>
+                      {isListening 
+                        ? 'Speak clearly into your microphone... (e.g. "54 years old, severe chest pain radiating to left arm")' 
+                        : 'Tap the microphone or choose a voice simulation chip below. Arambh extracts age, gender, and condition.'}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Extracted Entity Visual Tags */}
+              {matchedKeywords.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] font-semibold uppercase text-slate-400">Extracted:</span>
+                  {matchedKeywords.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200/80 flex items-center space-x-1"
+                    >
+                      <Sparkles className="w-2.5 h-2.5 text-sky-600" />
+                      <span>{tag}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 1-Tap Voice Simulation Chips (Ensures 100% instant testing regardless of browser permissions) */}
+          <div className="pt-2 border-t border-slate-200/70">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
+                <Sparkles className="w-3 h-3 text-sky-600" />
+                <span>1-Tap Voice Simulation (Zero-Hardware Test)</span>
+              </span>
+              <span className="text-[10px] text-slate-400">Click to stream voice into intake</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => runVoiceSimulation('54 years old male with acute crushing chest pain radiating to left arm')}
+                disabled={isSimulating}
+                className="p-2 rounded-lg bg-white hover:bg-rose-50/70 border border-slate-200 hover:border-rose-300 text-left text-xs transition-all cursor-pointer shadow-xs group"
+              >
+                <div className="font-semibold text-slate-800 group-hover:text-rose-700 text-[11px] flex items-center justify-between">
+                  <span>🎙️ Chest Pain Voice</span>
+                  <span className="text-[9px] px-1 bg-rose-100 text-rose-700 rounded font-bold">Cardiac</span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate mt-0.5">"54 yo male, chest pain..."</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => runVoiceSimulation('Female 28 years old deep laceration with heavy arterial bleeding from leg')}
+                disabled={isSimulating}
+                className="p-2 rounded-lg bg-white hover:bg-rose-50/70 border border-slate-200 hover:border-rose-300 text-left text-xs transition-all cursor-pointer shadow-xs group"
+              >
+                <div className="font-semibold text-slate-800 group-hover:text-rose-700 text-[11px] flex items-center justify-between">
+                  <span>🎙️ Arterial Bleed Voice</span>
+                  <span className="text-[9px] px-1 bg-rose-100 text-rose-700 rounded font-bold">Trauma</span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate mt-0.5">"Female 28, heavy bleeding..."</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => runVoiceSimulation('42 years old patient severe asthma attack suffocating and low oxygen')}
+                disabled={isSimulating}
+                className="p-2 rounded-lg bg-white hover:bg-sky-50/70 border border-slate-200 hover:border-sky-300 text-left text-xs transition-all cursor-pointer shadow-xs group"
+              >
+                <div className="font-semibold text-slate-800 group-hover:text-sky-700 text-[11px] flex items-center justify-between">
+                  <span>🎙️ Choking / Airway</span>
+                  <span className="text-[9px] px-1 bg-sky-100 text-sky-800 rounded font-bold">Airway</span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate mt-0.5">"42 yo, severe asthma..."</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => runVoiceSimulation('74 years old grandmother collapsed after hard fall down stairs unconscious')}
+                disabled={isSimulating}
+                className="p-2 rounded-lg bg-white hover:bg-amber-50/70 border border-slate-200 hover:border-amber-300 text-left text-xs transition-all cursor-pointer shadow-xs group"
+              >
+                <div className="font-semibold text-slate-800 group-hover:text-amber-700 text-[11px] flex items-center justify-between">
+                  <span>🎙️ Fall & Collapse</span>
+                  <span className="text-[9px] px-1 bg-amber-100 text-amber-800 rounded font-bold">Impact</span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate mt-0.5">"74 yo, stairs fall shock..."</p>
+              </button>
             </div>
           </div>
         </div>

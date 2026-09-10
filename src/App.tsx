@@ -22,6 +22,8 @@ export default function App() {
   // Core Clinical State
   const [patients, setPatients] = useState<Patient[]>([]);
   const [emergencyCases, setEmergencyCases] = useState<EmergencyCase[]>([]);
+  const [selectedHospitalForAdmit, setSelectedHospitalForAdmit] = useState<HospitalEvaluation | null>(null);
+  const [selectedConditionForAdmit, setSelectedConditionForAdmit] = useState<string>('');
 
   // Smooth, robust view navigation with browser history sync
   const navigateToView = (view: string, pushHistory = true) => {
@@ -158,6 +160,8 @@ export default function App() {
         {activeView === 'fast_admit' && (
           <FastAdmitVoice
             isOfflineMode={isOfflineMode}
+            initialSelectedHospital={selectedHospitalForAdmit}
+            initialCondition={selectedConditionForAdmit}
             onCaseCreated={handleCaseCreated}
             onOpenAiAssistant={() => navigateToView('ai_chatbot')}
             onViewHospitals={() => navigateToView('hospitals')}
@@ -168,6 +172,7 @@ export default function App() {
         {activeView === 'hospitals' && (
           <NearestHospitalsView
             onSelectHospitalForAdmit={(hospEval: HospitalEvaluation) => {
+              setSelectedHospitalForAdmit(hospEval);
               navigateToView('fast_admit');
             }}
           />
@@ -198,13 +203,14 @@ export default function App() {
           />
         )}
 
-        {/* 4. AI EMERGENCY PROTOCOLS & CLINICAL CHAT */}
+        {/* 5. AI EMERGENCY PROTOCOLS & CLINICAL CHAT */}
         {activeView === 'ai_chatbot' && (
           <div className="px-4 py-4 max-w-4xl mx-auto">
             <AiChatbot
               isOfflineMode={isOfflineMode}
               isFloating={false}
-              onSelectConditionForIntake={() => {
+              onSelectConditionForIntake={(conditionText) => {
+                setSelectedConditionForAdmit(conditionText);
                 navigateToView('fast_admit');
               }}
             />
