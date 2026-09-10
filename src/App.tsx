@@ -8,6 +8,7 @@ import { AiChatbot } from './components/AiChatbot';
 import { FallMotionGuard } from './components/FallMotionGuard';
 import { EmergencyQuickLogin } from './components/EmergencyQuickLogin';
 import { AuditLogViewer } from './components/AuditLogViewer';
+import { OfflineEmergencyModal } from './components/OfflineEmergencyModal';
 
 import { Patient, EmergencyCase, Consultation, FollowUp, User, UserRole, HospitalEvaluation } from './types';
 import { LocalClinicalStorage } from './services/storage';
@@ -19,6 +20,7 @@ export default function App() {
   const [phiMasked, setPhiMasked] = useState<boolean>(false);
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [showQuickLogin, setShowQuickLogin] = useState<boolean>(false);
+  const [showOfflineModal, setShowOfflineModal] = useState<boolean>(false);
 
   // Core Clinical State
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -88,7 +90,10 @@ export default function App() {
 
     // Listen for online/offline events
     const handleOnline = () => setIsOfflineMode(false);
-    const handleOffline = () => setIsOfflineMode(true);
+    const handleOffline = () => {
+      setIsOfflineMode(true);
+      setShowOfflineModal(true);
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
@@ -128,6 +133,7 @@ export default function App() {
         onTogglePhiMasked={() => setPhiMasked(!phiMasked)}
         isOfflineMode={isOfflineMode}
         onToggleOfflineMode={() => setIsOfflineMode(!isOfflineMode)}
+        onOpenOfflineModal={() => setShowOfflineModal(true)}
         activeView={activeView}
         onSelectView={(v) => navigateToView(v)}
         pendingEmergencyCount={emergencyCases.filter(c => c.status === 'pending' || c.status === 'en_route').length}
@@ -155,6 +161,18 @@ export default function App() {
         />
       )}
 
+      {/* OFFLINE EMERGENCY QUICK POPUP */}
+      <OfflineEmergencyModal
+        isOpen={showOfflineModal}
+        onClose={() => setShowOfflineModal(false)}
+        isOfflineMode={isOfflineMode}
+        onToggleOfflineMode={() => setIsOfflineMode(!isOfflineMode)}
+        onTriggerSmsModal={() => {
+          setShowOfflineModal(false);
+          navigateToView('fast_admit');
+        }}
+      />
+
       {/* Main Content Area */}
       <main className="flex-1 overflow-x-hidden bg-slate-50 pb-20 md:pb-12">
         {/* 1. CORE USP: FAST ADMIT EMERGENCY SOS */}
@@ -166,6 +184,7 @@ export default function App() {
             onCaseCreated={handleCaseCreated}
             onOpenAiAssistant={() => navigateToView('ai_chatbot')}
             onViewHospitals={() => navigateToView('hospitals')}
+            onOpenOfflineModal={() => setShowOfflineModal(true)}
           />
         )}
 

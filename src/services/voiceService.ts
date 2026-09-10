@@ -1,7 +1,7 @@
 /**
  * Robust Emergency Voice Recognition & Clinical Entity Extraction Service
  * Handles multi-browser Web Speech API nuances, auto-recovery on silence, 
- * permission priming, and regex entity parsing.
+ * clean speech session cycling, and resilient clinical entity parsing.
  */
 
 import { TriageTag } from '../types';
@@ -29,7 +29,8 @@ export class VoiceEmergencyService {
   private static isUserIntentionallyListening = false;
   private static accumulatedTranscript = '';
   private static restartAttempts = 0;
-  private static maxRestarts = 5;
+  private static readonly MAX_RESTARTS = 12;
+  private static restartTimeoutId: any = null;
   private static callbacks: VoiceListenerCallbacks = {};
 
   public static isSupported(): boolean {
@@ -38,37 +39,7 @@ export class VoiceEmergencyService {
   }
 
   /**
-   * Checks or requests microphone hardware access
-   */
-  public static async requestMicPermission(): Promise<{ granted: boolean; error?: string }> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      return { granted: true }; // Fallback to browser's default prompt
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Stop tracks immediately to avoid keeping mic hot before recognition starts
-      stream.getTracks().forEach(track => track.stop());
-      return { granted: true };
-    } catch (err: any) {
-      const name = err.name || '';
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        return { 
-          granted: false, 
-          error: 'Microphone permission blocked. Please click the lock or camera icon in your address bar to allow microphone access.' 
-        };
-      }
-      if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        return { 
-          granted: false, 
-          error: 'No microphone hardware detected on this device.' 
-        };
-      }
-      return { granted: false, error: err.message || 'Could not initialize microphone.' };
-    }
-  }
-
-  /**
-   * Starts speech recognition with automatic pause/silence recovery
+   * Starts speech recognition with automatic silence recovery & graceful error handling
    */
   public static async startListening(callbacks: VoiceListenerCallbacks): Promise<boolean> {
     this.callbacks = callbacks;
@@ -76,16 +47,18 @@ export class VoiceEmergencyService {
     this.restartAttempts = 0;
     this.accumulatedTranscript = '';
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      callbacks.onError?.('Speech recognition is not supported in this browser. Please use Chrome, Edge, or 1-Tap Presets.', true, 'unsupported');
-      return false;
+    if (this.restartTimeoutId) {
+      clearTimeout(this.restartTimeoutId);
+      this.restartTimeoutId = null;
     }
 
-    // Attempt permission request first for clean UX
-    const perm = await this.requestMicPermission();
-    if (!perm.granted) {
-      callbacks.onError?.(perm.error || 'Microphone access denied', true, 'not-allowed');
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      callbacks.onError?.(
+        'Speech recognition is not natively supported in this browser. Please use Chrome/Edge or 1-Tap Voice Simulation.',
+        true,
+        'unsupported'
+      );
       this.isUserIntentionallyListening = false;
       return false;
     }
@@ -98,9 +71,15 @@ export class VoiceEmergencyService {
     if (!this.isUserIntentionallyListening) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
     try {
       if (this.recognition) {
         try {
+          this.recognition.onstart = null;
+          this.recognition.onresult = null;
+          this.recognition.onerror = null;
+          this.recognition.onend = null;
           this.recognition.abort();
         } catch {}
         this.recognition = null;
@@ -109,14 +88,17 @@ export class VoiceEmergencyService {
       const rec = new SpeechRecognition();
       rec.continuous = true;
       rec.interimResults = true;
-      rec.lang = 'en-US';
+      // Allow browser language detection or default to English
+      rec.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
       rec.maxAlternatives = 1;
 
       rec.onstart = () => {
+        this.restartAttempts = 0; // Reset restart attempts on successful active start
         this.callbacks.onStart?.();
       };
 
       rec.onresult = (event: any) => {
+        this.restartAttempts = 0; // Active speech resets restart counter
         let interim = '';
         let currentBatch = '';
 
@@ -145,17 +127,20 @@ export class VoiceEmergencyService {
 
       rec.onerror = (event: any) => {
         const err = event.error;
-        console.warn('[VoiceEmergencyService] Speech event error:', err);
 
         if (err === 'no-speech') {
-          // Non-fatal: Chrome reports no speech after a short quiet period
-          // If the user still wants to listen, we let onend handle the clean restart
+          // Normal silence detection from browser; do not show error banner, let onend restart smoothly
+          return;
+        }
+
+        if (err === 'aborted') {
+          // Normal abort when user stops or restarts
           return;
         }
 
         if (err === 'network') {
           this.callbacks.onError?.(
-            'Speech API requires an internet connection in Chrome. You can use 1-Tap Voice Simulation or type manually.',
+            'Speech API network issue. You can use 1-Tap Voice Simulation or enter symptoms manually.',
             false,
             'network'
           );
@@ -165,7 +150,7 @@ export class VoiceEmergencyService {
         if (err === 'not-allowed' || err === 'service-not-allowed') {
           this.isUserIntentionallyListening = false;
           this.callbacks.onError?.(
-            'Microphone access is not allowed. Please grant microphone permission in your browser.',
+            'Microphone access blocked. Click the microphone/lock icon in your address bar to allow access, or use 1-Tap Simulation.',
             true,
             'not-allowed'
           );
@@ -174,27 +159,33 @@ export class VoiceEmergencyService {
 
         if (err === 'audio-capture') {
           this.isUserIntentionallyListening = false;
-          this.callbacks.onError?.('No microphone detected. Please check audio input hardware.', true, 'audio-capture');
+          this.callbacks.onError?.(
+            'No microphone detected. Please check audio hardware or use 1-Tap Simulation.',
+            true,
+            'audio-capture'
+          );
           return;
         }
 
-        // Generic non-fatal error
-        this.callbacks.onError?.(`Audio warning: ${err}`, false, err);
+        // Generic audio event
+        console.warn('[VoiceEmergencyService] Non-fatal audio event:', err);
       };
 
       rec.onend = () => {
-        // If the user still intended to listen and hasn't exceeded max restarts, auto-restart!
-        if (this.isUserIntentionallyListening && this.restartAttempts < this.maxRestarts) {
+        // If user still wants to listen, seamlessly restart without dropping accumulated text
+        if (this.isUserIntentionallyListening && this.restartAttempts < this.MAX_RESTARTS) {
           this.restartAttempts++;
-          setTimeout(() => {
+          this.restartTimeoutId = setTimeout(() => {
             if (this.isUserIntentionallyListening) {
               try {
                 this.initAndStart();
               } catch (e) {
-                console.warn('Restart failed:', e);
+                console.warn('[VoiceEmergencyService] Auto-restart failed:', e);
+                this.isUserIntentionallyListening = false;
+                this.callbacks.onEnd?.();
               }
             }
-          }, 250);
+          }, 150);
         } else {
           this.isUserIntentionallyListening = false;
           this.callbacks.onEnd?.();
@@ -204,23 +195,40 @@ export class VoiceEmergencyService {
       rec.start();
       this.recognition = rec;
     } catch (e: any) {
-      console.warn('Failed to start speech recognition:', e);
-      this.callbacks.onError?.('Could not activate speech recognition. Try restarting browser or use 1-Tap Presets.', false, 'start_failed');
+      console.warn('[VoiceEmergencyService] Speech start exception:', e);
+      this.callbacks.onError?.(
+        'Speech recognition service encountered an error. You can use the 1-Tap Voice Simulation chips below.',
+        false,
+        'start_failed'
+      );
+      this.isUserIntentionallyListening = false;
+      this.callbacks.onEnd?.();
     }
   }
 
   /**
-   * Stops listening immediately
+   * Stops listening immediately and cleans up all timers and listeners
    */
   public static stopListening(): void {
     this.isUserIntentionallyListening = false;
-    this.restartAttempts = this.maxRestarts;
+    this.restartAttempts = this.MAX_RESTARTS;
+
+    if (this.restartTimeoutId) {
+      clearTimeout(this.restartTimeoutId);
+      this.restartTimeoutId = null;
+    }
+
     if (this.recognition) {
       try {
+        this.recognition.onstart = null;
+        this.recognition.onresult = null;
+        this.recognition.onerror = null;
+        this.recognition.onend = null;
         this.recognition.stop();
       } catch {}
       this.recognition = null;
     }
+
     this.callbacks.onEnd?.();
   }
 
@@ -234,15 +242,26 @@ export class VoiceEmergencyService {
     };
 
     // 1. Extract Age
-    // Matches: "45 years old", "age 52", "aged 60", "I am 34", "68 yo", "patient is 25"
-    const ageMatch = lower.match(/(?:age\s*(?:is)?\s*|aged\s*|i am\s*|he is\s*|she is\s*|patient\s*(?:is)?\s*)?(\b\d{1,2}\b)\s*(?:years|yrs|years old|yr old|yo\b)/i) 
+    // Handles: "45 years old", "age 52", "aged 60", "I am 34", "68 yo", "patient is 25", "Rahul 45 male"
+    const ageExplicitMatch = lower.match(/(?:age\s*(?:is)?\s*|aged\s*|i am\s*|he is\s*|she is\s*|patient\s*(?:is)?\s*)?(\b\d{1,2}\b)\s*(?:years|yrs|years old|yr old|yo\b)/i) 
       || lower.match(/(?:age\s*(?:is)?\s*|aged\s*)(\b\d{1,2}\b)/i);
 
-    if (ageMatch && ageMatch[1]) {
-      const num = parseInt(ageMatch[1], 10);
+    if (ageExplicitMatch && ageExplicitMatch[1]) {
+      const num = parseInt(ageExplicitMatch[1], 10);
       if (num >= 1 && num <= 115) {
         result.age = num.toString();
         result.matchedKeywords.push(`Age ${num}`);
+      }
+    } else {
+      // Secondary fallback: a 2-digit number (18-99) followed or preceded by gender (e.g., "45 male", "female 32")
+      const proximityMatch = lower.match(/(?:male|female|man|woman)\s+(\b\d{1,2}\b)/i) ||
+                             lower.match(/(\b\d{1,2}\b)\s+(?:male|female|man|woman)/i);
+      if (proximityMatch && proximityMatch[1]) {
+        const num = parseInt(proximityMatch[1], 10);
+        if (num >= 1 && num <= 115) {
+          result.age = num.toString();
+          result.matchedKeywords.push(`Age ${num}`);
+        }
       }
     }
 
@@ -256,24 +275,26 @@ export class VoiceEmergencyService {
     }
 
     // 3. Extract Name
-    // Matches: "my name is Rahul Sharma", "name is Anita", "patient name is Rohan", "this is John"
-    const nameMatch = lower.match(/(?:my name is|patient(?:\'s)? name is|name is|this is|call me)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
+    // Matches: "my name is Rahul Sharma", "name is Anita", "patient name is Rohan", "this is John", "patient Rahul"
+    const nameMatch = lower.match(/(?:my name is|patient(?:\'s)? name is|name is|this is|call me|patient)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
     if (nameMatch && nameMatch[1]) {
       const candidate = nameMatch[1].trim();
-      const blacklisted = ['having', 'severe', 'acute', 'chest', 'in', 'at', 'with', 'male', 'female', 'emergency'];
+      const blacklisted = [
+        'having', 'severe', 'acute', 'chest', 'in', 'at', 'with', 'male', 'female', 
+        'emergency', 'pain', 'breathing', 'blood', 'unconscious', 'fever', 'is', 'a'
+      ];
       if (!blacklisted.includes(candidate.toLowerCase())) {
-        // Capitalize words
         const formatted = candidate.replace(/\b\w/g, l => l.toUpperCase());
         result.name = formatted;
         result.matchedKeywords.push(`Name: ${formatted}`);
       }
     }
 
-    // 4. Extract Indian Phone Number
+    // 4. Extract Contact / Phone Number (Handles Indian 10-digit mobile patterns)
     const phoneMatch = text.match(/(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
     if (phoneMatch) {
       result.phone = phoneMatch[0].replace(/\s+/g, '');
-      result.matchedKeywords.push(`Phone`);
+      result.matchedKeywords.push(`Phone: ${result.phone}`);
     }
 
     // 5. Triage Category & Symptoms Detection
@@ -283,35 +304,37 @@ export class VoiceEmergencyService {
 
     const cardiacTerms = [
       'chest pain', 'chest tightness', 'heart', 'cardiac', 'arm pain', 'jaw pain',
-      'left arm', 'palpitations', 'heart attack', 'angina', 'crushing pain', 'cold sweat'
+      'left arm', 'palpitations', 'heart attack', 'angina', 'crushing pain', 'cold sweat',
+      'heaviness in chest', 'chest pressure'
     ];
     const traumaTerms = [
       'bleed', 'bleeding', 'blood', 'fracture', 'broken', 'accident', 'cut', 'fall',
-      'wound', 'head injury', 'trauma', 'concussion', 'laceration', 'crash', 'stab'
+      'wound', 'head injury', 'trauma', 'concussion', 'laceration', 'crash', 'stab',
+      'hit by', 'hemorrhage', 'bike fall'
     ];
     const respiratoryTerms = [
       'breath', 'breathing', 'asthma', 'choking', 'wheezing', 'gasping', 'shortness of breath',
-      'suffocating', 'inhaler', 'oxygen', 'airway'
+      'suffocating', 'inhaler', 'oxygen', 'airway', 'cannot breathe', 'gasp'
     ];
 
     cardiacTerms.forEach(term => {
       if (lower.includes(term)) {
         cardiacScore += 2;
-        result.matchedKeywords.push(term);
+        if (!result.matchedKeywords.includes(term)) result.matchedKeywords.push(term);
       }
     });
 
     traumaTerms.forEach(term => {
       if (lower.includes(term)) {
         traumaScore += 2;
-        result.matchedKeywords.push(term);
+        if (!result.matchedKeywords.includes(term)) result.matchedKeywords.push(term);
       }
     });
 
     respiratoryTerms.forEach(term => {
       if (lower.includes(term)) {
         respiratoryScore += 2;
-        result.matchedKeywords.push(term);
+        if (!result.matchedKeywords.includes(term)) result.matchedKeywords.push(term);
       }
     });
 
@@ -329,3 +352,4 @@ export class VoiceEmergencyService {
     return result;
   }
 }
+

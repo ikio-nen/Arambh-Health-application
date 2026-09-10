@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, PhoneCall, Zap, MapPin, AlertTriangle, ShieldCheck, 
   Heart, Activity, CheckCircle2, Clock, Navigation, Volume2, VolumeX, 
-  ArrowRight, Stethoscope, RefreshCw, Radio, UserCheck, ShieldAlert, Bot
+  ArrowRight, Stethoscope, RefreshCw, Radio, UserCheck, ShieldAlert, Bot,
+  WifiOff
 } from 'lucide-react';
 import { EmergencyCase, HospitalEvaluation, TriageTag } from '../types';
 import { rankAllHospitals, nearestHospital } from '../services/geo';
@@ -16,6 +17,7 @@ import { VoiceEmergencyService, ExtractedVoiceEntities } from '../services/voice
 import { MessageSquare, Send, Copy, Check, Sparkles, XCircle } from 'lucide-react';
 import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
 import { SmsDispatchModal } from './SmsDispatchModal';
+import { HoldToSosButton } from './HoldToSosButton';
 
 interface FastAdmitVoiceProps {
   isOfflineMode: boolean;
@@ -24,6 +26,7 @@ interface FastAdmitVoiceProps {
   onViewHospitals?: () => void;
   initialSelectedHospital?: HospitalEvaluation | null;
   initialCondition?: string;
+  onOpenOfflineModal?: () => void;
 }
 
 export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
@@ -33,6 +36,7 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   onViewHospitals,
   initialSelectedHospital,
   initialCondition,
+  onOpenOfflineModal,
 }) => {
   // Voice input state
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -292,10 +296,10 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
 
     // Record emergency intake in cryptographic audit logs
     LocalClinicalStorage.logAuditAction(
+      { id: 'system-fast-admit', name: 'Emergency Voice Dispatch Engine', role: 'receptionist' },
       'VOICE_INTAKE_CAPTURED',
-      `Emergency intake ${newCase.id} created: Patient ${shellPatient.name} (${shellPatient.age || 'Unknown age'}y/${shellPatient.gender || 'Unknown'}), triage ${selectedTag.toUpperCase()} routed to ${targetHosp.name}`,
-      'system',
-      newCase.id
+      newCase.id,
+      `Emergency intake ${newCase.id} created: Patient ${shellPatient.name} (${shellPatient.age || 'Unknown age'}y/${shellPatient.gender || 'Unknown'}), triage ${selectedTag.toUpperCase()} routed to ${targetHosp.name}`
     );
 
     setReservationToken(token);
@@ -439,18 +443,39 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
             </p>
           </div>
 
-          {/* GPS Status */}
-          <div className="flex items-center space-x-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700">
-            <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-            <span className="text-slate-600 truncate max-w-[200px] font-medium">{gpsStatus}</span>
-            <button
-              onClick={detectLocation}
-              disabled={isDetectingGps}
-              className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer transition-colors"
-              title="Refresh GPS"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
-            </button>
+          {/* Controls: Offline Toolkit & GPS Status */}
+          <div className="flex items-center space-x-2">
+            {onOpenOfflineModal && (
+              <button
+                type="button"
+                onClick={onOpenOfflineModal}
+                className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border shadow-2xs ${
+                  isOfflineMode
+                    ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                }`}
+                title="Open Quick Offline Emergency Toolkit"
+              >
+                <WifiOff className={`w-3.5 h-3.5 ${isOfflineMode ? 'text-amber-600' : 'text-slate-500'}`} />
+                <span>Offline Toolkit</span>
+                {isOfflineMode && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </button>
+            )}
+
+            <div className="flex items-center space-x-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700">
+              <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+              <span className="text-slate-600 truncate max-w-[200px] font-medium">{gpsStatus}</span>
+              <button
+                onClick={detectLocation}
+                disabled={isDetectingGps}
+                className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer transition-colors"
+                title="Refresh GPS"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -794,21 +819,18 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
           </div>
         )}
 
-        {/* ACTION BUTTON: INSTANT ADMISSION DISPATCH */}
+        {/* ACTION BUTTON: INSTANT ADMISSION DISPATCH (SAFEGUARDED WITH TAP-AND-HOLD) */}
         <div className="pt-2">
-          <button
+          <HoldToSosButton
             id="btn-fast-admit-now"
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleTriggerFastAdmit}
-            className="w-full py-3.5 px-6 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-base flex items-center justify-center space-x-2.5 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
-          >
-            <Zap className="w-5 h-5 fill-white" />
-            <span>
-              {isSubmitting ? 'Reserving ER Bed...' : 'Fast Admit & Dispatch Ambulance'}
-            </span>
-            <ArrowRight className="w-4 h-4 ml-auto" />
-          </button>
+            onTrigger={handleTriggerFastAdmit}
+            isSubmitting={isSubmitting}
+            label="Fast Admit & Dispatch Ambulance (SOS)"
+            subLabel="Hold for 1.5s to dispatch nearest ambulance and reserve ER bed"
+            variant="danger"
+            holdDurationMs={1500}
+            showProtectionToggle={true}
+          />
           <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 px-1 font-medium">
             <span>• Pre-allocated trauma bed</span>
             <span>• Direct emergency line</span>
@@ -825,13 +847,25 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
                 Offline SMS Emergency Dispatch (108)
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowSmsPreview(!showSmsPreview)}
-              className="text-xs text-sky-600 hover:text-sky-800 font-medium underline cursor-pointer"
-            >
-              {showSmsPreview ? 'Hide Payload' : 'View Payload Details'}
-            </button>
+            <div className="flex items-center space-x-2">
+              {onOpenOfflineModal && (
+                <button
+                  type="button"
+                  onClick={onOpenOfflineModal}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 font-semibold cursor-pointer flex items-center space-x-1 shadow-2xs transition-colors"
+                >
+                  <WifiOff className="w-3 h-3 text-amber-600" />
+                  <span>Offline Toolkit</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowSmsPreview(!showSmsPreview)}
+                className="text-xs text-sky-600 hover:text-sky-800 font-medium underline cursor-pointer"
+              >
+                {showSmsPreview ? 'Hide Payload' : 'View Payload Details'}
+              </button>
+            </div>
           </div>
 
           {showSmsPreview && (

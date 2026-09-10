@@ -13,6 +13,7 @@ interface NavbarProps {
   onTogglePhiMasked?: () => void;
   isOfflineMode: boolean;
   onToggleOfflineMode: () => void;
+  onOpenOfflineModal?: () => void;
   activeView: string;
   onSelectView: (view: string) => void;
   pendingEmergencyCount: number;
@@ -23,6 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   isOfflineMode,
   onToggleOfflineMode,
+  onOpenOfflineModal,
   activeView,
   onSelectView,
   pendingEmergencyCount,
@@ -146,17 +148,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Right Utilities: Offline Status + Staff Portal */}
           <div className="flex items-center space-x-2">
             
-            {/* Live / Offline mode pill */}
+            {/* Live / Offline mode pill (Opens quick Offline Emergency Toolkit) */}
             <button
               onClick={() => {
                 VibrationService.triggerQuickTap();
-                onToggleOfflineMode();
+                if (onOpenOfflineModal) {
+                  onOpenOfflineModal();
+                } else {
+                  onToggleOfflineMode();
+                }
               }}
-              title={isOfflineMode ? 'Switch to Online mode' : 'Simulate Offline 2G/Mesh mode'}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center space-x-1.5 border transition-colors cursor-pointer ${
+              title={isOfflineMode ? 'Open Offline Emergency Toolkit' : 'Open Offline Toolkit & Mode Controls'}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border transition-all cursor-pointer shadow-2xs ${
                 isOfflineMode 
-                  ? 'bg-amber-50 border-amber-300 text-amber-800' 
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 ring-2 ring-amber-200/50' 
+                  : 'bg-emerald-50 hover:bg-emerald-100/70 border-emerald-200 text-emerald-800'
               }`}
             >
               {isOfflineMode ? (
@@ -164,8 +170,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               ) : (
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               )}
-              <span className="hidden sm:inline text-[11px]">
-                {isOfflineMode ? 'Offline' : 'Live'}
+              <span className="text-[11px]">
+                {isOfflineMode ? 'Offline Toolkit' : 'Live / Offline'}
               </span>
             </button>
 
@@ -225,6 +231,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               );
             })}
+
+            {/* Offline Toolkit Quick Action for Mobile */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenOfflineModal) {
+                  onOpenOfflineModal();
+                } else {
+                  onToggleOfflineMode();
+                }
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center justify-between text-amber-900 bg-amber-50 hover:bg-amber-100 font-medium border border-amber-200 mt-1 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center space-x-2.5">
+                <WifiOff className="w-4 h-4 text-amber-600" />
+                <span>Offline Emergency Toolkit</span>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                {isOfflineMode ? 'Offline Active' : 'Zero Data'}
+              </span>
+            </button>
 
             {onOpenQuickLogin && (
               <button
