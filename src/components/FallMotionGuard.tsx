@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Shield, AlertTriangle, Activity, Settings2, Bell, 
   RotateCcw, CheckCircle2, Volume2, VolumeX, Smartphone,
-  Clock, Heart, HelpCircle, ArrowRight, X
+  Clock, Heart, HelpCircle, ArrowRight, X, PhoneCall
 } from 'lucide-react';
 import { EmergencyCase } from '../types';
 import { generateId } from '../services/storage';
@@ -539,13 +539,23 @@ export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
                 I am OK • Cancel Emergency Alert
               </button>
 
-              <button
-                type="button"
-                onClick={dispatchAutoEmergency}
-                className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition-colors cursor-pointer border border-rose-200"
-              >
-                Send 108 Ambulance Immediately
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="tel:108"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs"
+                >
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  <span>Call 108 Free</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={dispatchAutoEmergency}
+                  className="py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition-colors cursor-pointer border border-rose-200 flex items-center justify-center"
+                >
+                  <span>Dispatch SOS</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

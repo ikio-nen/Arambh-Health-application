@@ -729,17 +729,27 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              VibrationService.triggerQuickTap();
-              setIsSmsModalOpen(true);
-            }}
-            className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
-          >
-            <Send className="w-4 h-4 text-sky-400" />
-            <span>Open Emergency SMS Dispatch Gateway (108 & Contacts)</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <a
+              href="tel:108"
+              className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
+            >
+              <PhoneCall className="w-4 h-4 text-emerald-200" />
+              <span>Call 108 Ambulance (Free Voice)</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setIsSmsModalOpen(true);
+              }}
+              className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
+            >
+              <Send className="w-4 h-4 text-sky-400" />
+              <span>WhatsApp / SMS Gateway</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -757,8 +767,9 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
           bedToken: reservationToken || 'BED-RES-108',
           targetHospital: bestHospital?.hospital.name || 'Metro Trauma Center',
         })}
-        initialPhone="108"
+        initialPhone="+91 98201 10811"
         caseId={admitSuccessCase?.id || 'EMG-ADMIT-108'}
+        patientName={patientName || 'Emergency Patient'}
         targetHospital={bestHospital?.hospital.name || 'Metro Trauma Center'}
       />
     </div>

@@ -204,6 +204,41 @@ export class SmsEmergencyService {
   }
 
   /**
+   * Builds the WhatsApp launch URL (100% free over Wi-Fi/Mobile Data, zero carrier SMS charges)
+   */
+  public static buildWhatsAppLaunchUrl(phoneNumber: string | undefined, body: string): string {
+    const encodedBody = encodeURIComponent(body);
+    if (phoneNumber && phoneNumber.trim() && phoneNumber !== '108') {
+      const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+      return `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${encodedBody}`;
+    }
+    return `https://api.whatsapp.com/send?text=${encodedBody}`;
+  }
+
+  /**
+   * Formats a human-readable emergency alert with Google Maps GPS link for family/emergency WhatsApp
+   */
+  public static formatHumanReadableEmergencyAlert(data: {
+    lat: number;
+    long: number;
+    patientName?: string;
+    condition: string;
+    bedToken: string;
+    targetHospital: string;
+    etaMinutes?: number;
+  }): string {
+    const mapsLink = `https://maps.google.com/?q=${data.lat.toFixed(4)},${data.long.toFixed(4)}`;
+    return `🚨 *EMERGENCY MEDICAL ALERT (Arambh Health)*\n` +
+      `• Patient: ${data.patientName || 'Emergency Patient'}\n` +
+      `• Condition: ${data.condition}\n` +
+      `• Hospital: ${data.targetHospital}\n` +
+      `• Bed Token: ${data.bedToken}\n` +
+      `• Live GPS Location: ${mapsLink}\n` +
+      `• Expected ETA: ~${data.etaMinutes || 5} mins\n` +
+      `_Toll-free emergency ambulance: Call 108_`;
+  }
+
+  /**
    * Decodes an inbound SMS string into structured clinical emergency case data
    */
   public static decodeEmergencySms(smsText: string): DecodedEmergencySms | null {
