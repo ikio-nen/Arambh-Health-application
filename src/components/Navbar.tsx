@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Zap, Building2, Activity, Bot, User, Menu, X, 
-  Wifi, WifiOff, ShieldCheck, Shield 
+  Wifi, WifiOff, ShieldCheck, Shield, FileText 
 } from 'lucide-react';
 import { User as SystemUser } from '../types';
 import { VibrationService } from '../services/vibrationService';
@@ -74,6 +74,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       activeColor: 'bg-slate-100 text-slate-900 border-slate-300 font-semibold',
       iconColor: 'text-slate-800',
       badge: pendingEmergencyCount > 0 ? pendingEmergencyCount : undefined,
+    },
+    {
+      id: 'audit_logs',
+      label: 'Audit Logs',
+      icon: FileText,
+      activeColor: 'bg-slate-100 text-slate-900 border-slate-300 font-semibold',
+      iconColor: 'text-indigo-600',
     },
     {
       id: 'ai_chatbot',

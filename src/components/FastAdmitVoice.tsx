@@ -290,6 +290,14 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
     await secureLocalDB.saveEmergencyCase(newCase, isOfflineMode);
     await secureLocalDB.savePatient(shellPatient, isOfflineMode);
 
+    // Record emergency intake in cryptographic audit logs
+    LocalClinicalStorage.logAuditAction(
+      'VOICE_INTAKE_CAPTURED',
+      `Emergency intake ${newCase.id} created: Patient ${shellPatient.name} (${shellPatient.age || 'Unknown age'}y/${shellPatient.gender || 'Unknown'}), triage ${selectedTag.toUpperCase()} routed to ${targetHosp.name}`,
+      'system',
+      newCase.id
+    );
+
     setReservationToken(token);
     setAdmitSuccessCase(newCase);
     setIsSubmitting(false);

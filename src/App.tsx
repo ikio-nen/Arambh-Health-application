@@ -7,6 +7,7 @@ import { HospitalDashboard } from './components/HospitalDashboard';
 import { AiChatbot } from './components/AiChatbot';
 import { FallMotionGuard } from './components/FallMotionGuard';
 import { EmergencyQuickLogin } from './components/EmergencyQuickLogin';
+import { AuditLogViewer } from './components/AuditLogViewer';
 
 import { Patient, EmergencyCase, Consultation, FollowUp, User, UserRole, HospitalEvaluation } from './types';
 import { LocalClinicalStorage } from './services/storage';
@@ -203,7 +204,14 @@ export default function App() {
           />
         )}
 
-        {/* 5. AI EMERGENCY PROTOCOLS & CLINICAL CHAT */}
+        {/* 5. AUDIT LOGS & COMPLIANCE HISTORY */}
+        {activeView === 'audit_logs' && (
+          <div className="px-4 py-4 max-w-5xl mx-auto">
+            <AuditLogViewer />
+          </div>
+        )}
+
+        {/* 6. AI EMERGENCY PROTOCOLS & CLINICAL CHAT */}
         {activeView === 'ai_chatbot' && (
           <div className="px-4 py-4 max-w-4xl mx-auto">
             <AiChatbot
