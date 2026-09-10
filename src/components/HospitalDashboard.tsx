@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, Heart, Activity, AlertTriangle, ShieldCheck, 
-  UserPlus, Clock, MapPin, CheckCircle2, ChevronRight, Phone, 
-  RefreshCw, FileText, Lock, UserCheck, ShieldAlert, ArrowRight,
-  Filter, Bell, Sparkles, Send
+  Clock, MapPin, CheckCircle2, ChevronRight, Phone, 
+  RefreshCw, FileText, UserCheck, ShieldAlert, ArrowRight,
+  Filter, Bell, Sparkles, Search, Stethoscope, Plus, Trash2,
+  X, Check, BedDouble, Ambulance
 } from 'lucide-react';
-import { EmergencyCase, Patient, User, EmergencyStatus } from '../types';
-import { LocalClinicalStorage, INITIAL_USERS, maskPhi } from '../services/storage';
+import { EmergencyCase, Patient, User, EmergencyStatus, Consultation } from '../types';
+import { LocalClinicalStorage, INITIAL_USERS, maskPhi, generateId } from '../services/storage';
 import { secureLocalDB } from '../services/secureLocalDatabase';
+import { VibrationService } from '../services/vibrationService';
 
 interface HospitalDashboardProps {
   emergencyCases: EmergencyCase[];
@@ -16,8 +18,7 @@ interface HospitalDashboardProps {
   phiMasked: boolean;
   isOfflineMode: boolean;
   onPatientConverted: (patient: Patient) => void;
-  onOpenConsultation: (patientId: string) => void;
-  onOpenTimeline: (patientId: string) => void;
+  onCaseUpdated?: (updatedCase: EmergencyCase) => void;
 }
 
 export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
@@ -27,54 +28,48 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   phiMasked,
   isOfflineMode,
   onPatientConverted,
-  onOpenConsultation,
-  onOpenTimeline,
+  onCaseUpdated,
 }) => {
   const [cases, setCases] = useState<EmergencyCase[]>(initialCases);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [staffFilter, setStaffFilter] = useState<'all' | 'assigned_to_me' | 'unassigned'>('all');
-  const [selectedCaseForConvert, setSelectedCaseForConvert] = useState<EmergencyCase | null>(null);
-  const [selectedCaseForAssign, setSelectedCaseForAssign] = useState<EmergencyCase | null>(null);
-  const [assigneeId, setAssigneeId] = useState<string>('');
-  const [isAssigning, setIsAssigning] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeStaffUser, setActiveStaffUser] = useState<User>(
+    currentUser || INITIAL_USERS[0]
+  );
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [audioAlertEnabled, setAudioAlertEnabled] = useState<boolean>(false);
   const [statusFeedback, setStatusFeedback] = useState<string>('');
 
-  // Conversion Form State
-  const [convName, setConvName] = useState('');
-  const [convAge, setConvAge] = useState('');
-  const [convGender, setConvGender] = useState<'Male' | 'Female' | 'Other' | 'Undisclosed'>('Male');
-  const [convPhone, setConvPhone] = useState('');
-  const [convEmail, setConvEmail] = useState('');
-  const [convAddress, setConvAddress] = useState('');
-  const [convEmergencyContact, setConvEmergencyContact] = useState('');
-  const [isSubmittingConvert, setIsSubmittingConvert] = useState(false);
-  const [convertSuccessMsg, setConvertSuccessMsg] = useState('');
+  // Selected Case for Clinical Examination Drawer / Modal
+  const [examiningCase, setExaminingCase] = useState<EmergencyCase | null>(null);
+  const [bpValue, setBpValue] = useState<string>('120/80');
+  const [hrValue, setHrValue] = useState<string>('88');
+  const [spo2Value, setSpo2Value] = useState<string>('98');
+  const [tempValue, setTempValue] = useState<string>('98.6');
+  const [clinicalNotes, setClinicalNotes] = useState<string>('');
+  const [diagnosisText, setDiagnosisText] = useState<string>('');
+  const [prescriptions, setPrescriptions] = useState<string[]>([
+    'IV Normal Saline 500ml stat',
+    'Continuous Cardiac Monitoring',
+  ]);
+  const [newPrescriptionInput, setNewPrescriptionInput] = useState<string>('');
+  const [isSavingExam, setIsSavingExam] = useState<boolean>(false);
 
-  // Keep cases in sync with props
+  // Sync cases with props
   useEffect(() => {
     setCases(initialCases);
   }, [initialCases]);
 
-  // Security Check: Verify User is Authorized Personnel (super_admin, admin, doctor, receptionist)
-  const isAuthorized = currentUser && ['super_admin', 'admin', 'doctor', 'receptionist'].includes(currentUser.role);
-
   useEffect(() => {
-    if (!isAuthorized) {
-      LocalClinicalStorage.logAuditAction(
-        currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : { id: 'anonymous', name: 'Unauthorized Visitor', role: 'receptionist' },
-        'SECURITY_UNAUTHORIZED_ACCESS_BLOCKED',
-        undefined,
-        'Access to Emergency Hospital Staff Dashboard blocked: HIPAA Clearance required.'
-      );
+    if (currentUser) {
+      setActiveStaffUser(currentUser);
     }
-  }, [isAuthorized, currentUser]);
+  }, [currentUser]);
 
-  // Real-time polling updates
+  // Refresh cases
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
+    VibrationService.triggerQuickTap();
     try {
       if (!isOfflineMode) {
         const res = await fetch('/api/emergency/cases');
@@ -82,547 +77,434 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           const freshCases = await res.json();
           setCases(freshCases);
           LocalClinicalStorage.setEmergencyCases(freshCases);
+        } else {
+          setCases(LocalClinicalStorage.getEmergencyCases());
         }
       } else {
-        const local = LocalClinicalStorage.getEmergencyCases();
-        setCases(local);
+        setCases(LocalClinicalStorage.getEmergencyCases());
       }
-    } catch (e) {
-      console.warn('Refresh failed:', e);
+    } catch {
+      setCases(LocalClinicalStorage.getEmergencyCases());
     } finally {
       setIsRefreshing(false);
       setLastRefreshed(new Date().toLocaleTimeString());
     }
   };
 
-  // Auto-refresh interval every 6 seconds for live real-time status updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      handleManualRefresh();
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [isOfflineMode]);
-
-  // Handle Case Assignment to Specific Staff Member
-  const handleAssignStaffSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCaseForAssign || !assigneeId) return;
-
-    setIsAssigning(true);
-    const assignedUser = INITIAL_USERS.find(u => u.id === assigneeId);
-    const staffName = assignedUser ? `${assignedUser.name} (${assignedUser.role.toUpperCase()})` : 'Assigned Emergency Responder';
-
-    try {
-      if (!isOfflineMode) {
-        const res = await fetch(`/api/emergency/cases/${selectedCaseForAssign.id}/assign`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            assigned_staff_id: assigneeId,
-            assigned_staff_name: staffName,
-            assigned_by_id: currentUser?.id,
-            assigned_by_name: currentUser?.name,
-            assigned_by_role: currentUser?.role,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setCases(prev => prev.map(c => c.id === data.emergency_case.id ? data.emergency_case : c));
-          LocalClinicalStorage.setEmergencyCases(cases);
-        }
-      }
-    } catch (err) {
-      console.warn('Network assignment failed, persisting to secure local DB:', err);
-    }
-
-    // Local / Offline assignment persistence
-    await secureLocalDB.assignEmergencyCase(selectedCaseForAssign.id, assigneeId, staffName, true);
+  // Instant 1-Click Operational Status Transition
+  const handleUpdateStatus = (caseId: string, newStatus: EmergencyStatus) => {
+    VibrationService.triggerQuickTap();
     const updated = cases.map(c => {
-      if (c.id === selectedCaseForAssign.id) {
-        return {
+      if (c.id === caseId) {
+        const updatedCase: EmergencyCase = {
           ...c,
-          assigned_staff_id: assigneeId,
-          assigned_staff_name: staffName,
-          assigned_at: new Date().toISOString(),
-          status: c.status === 'pending' ? 'assigned' as EmergencyStatus : c.status,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
         };
+        if (onCaseUpdated) onCaseUpdated(updatedCase);
+        return updatedCase;
       }
       return c;
     });
+
     setCases(updated);
     LocalClinicalStorage.setEmergencyCases(updated);
+    secureLocalDB.updateEmergencyCaseStatus(caseId, newStatus, true);
 
-    LocalClinicalStorage.logAuditAction(
-      currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : { id: 'staff', name: 'Charge Staff', role: 'doctor' },
-      'CASE_ASSIGNED',
-      selectedCaseForAssign.patient_profile_id,
-      `Case ${selectedCaseForAssign.id} assigned to ${staffName}.`
-    );
-
-    setStatusFeedback(`Assigned case ${selectedCaseForAssign.id} to ${staffName}`);
+    const targetCase = updated.find(c => c.id === caseId);
+    setStatusFeedback(`Case #${caseId} updated to "${newStatus.toUpperCase()}"`);
     setTimeout(() => setStatusFeedback(''), 3500);
-    setIsAssigning(false);
-    setSelectedCaseForAssign(null);
-  };
-
-  // Handle Quick Status Change
-  const handleUpdateStatus = async (caseId: string, newStatus: EmergencyStatus) => {
-    try {
-      if (!isOfflineMode) {
-        await fetch(`/api/emergency/cases/${caseId}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: newStatus,
-            user_id: currentUser?.id,
-            user_name: currentUser?.name,
-            user_role: currentUser?.role,
-          }),
-        });
-      }
-    } catch (e) {
-      console.warn('Network status update failed, applying local DB update:', e);
-    }
-
-    await secureLocalDB.updateEmergencyCaseStatus(caseId, newStatus, true);
-    const updated = cases.map(c => c.id === caseId ? { ...c, status: newStatus } : c);
-    setCases(updated);
-    LocalClinicalStorage.setEmergencyCases(updated);
 
     LocalClinicalStorage.logAuditAction(
-      currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : { id: 'staff', name: 'Staff', role: 'doctor' },
+      { id: activeStaffUser.id, name: activeStaffUser.name, role: activeStaffUser.role },
       'EMERGENCY_STATUS_UPDATED',
-      cases.find(c => c.id === caseId)?.patient_profile_id,
-      `Status updated to ${newStatus}`
+      caseId,
+      `Status changed to ${newStatus} by ${activeStaffUser.name}`
     );
-
-    setStatusFeedback(`Case ${caseId} status updated to: ${newStatus.toUpperCase()}`);
-    setTimeout(() => setStatusFeedback(''), 3000);
   };
 
-  // Open conversion modal
-  const handleOpenConvertModal = (ec: EmergencyCase) => {
-    setSelectedCaseForConvert(ec);
-    const existingPatient = patients.find(p => p.id === ec.patient_profile_id);
-    if (existingPatient) {
-      setConvName(existingPatient.name.startsWith('Emergency') ? '' : existingPatient.name);
-      setConvAge(existingPatient.age === 'Unknown' ? '' : String(existingPatient.age));
-      setConvGender(existingPatient.gender);
-      setConvPhone(existingPatient.contact.includes('Hotline') ? '' : existingPatient.contact);
-      setConvEmail(existingPatient.email || '');
-      setConvAddress(existingPatient.address || '');
-      setConvEmergencyContact(existingPatient.emergency_contact || '');
-    } else {
-      setConvName('');
-      setConvAge('');
-      setConvGender('Male');
-      setConvPhone(ec.contact || '');
-      setConvEmail('');
-      setConvAddress(`GPS: ${ec.lat}° N, ${ec.long}° E`);
-      setConvEmergencyContact('');
-    }
-    setConvertSuccessMsg('');
+  // Open Clinical Examination Modal
+  const handleOpenExamination = (ec: EmergencyCase) => {
+    VibrationService.triggerQuickTap();
+    setExaminingCase(ec);
+    setClinicalNotes(`Initial ER assessment: Patient presented with ${ec.condition_text}.`);
+    setDiagnosisText(`Acute ${ec.triage_tag.toUpperCase()} Condition (Under Evaluation)`);
+    setBpValue('122/82');
+    setHrValue('92');
+    setSpo2Value('97');
+    setTempValue('98.6');
   };
 
-  // Submit PUT /patients/:id/convert
-  const handleConvertSubmit = async (e: React.FormEvent) => {
+  // Save Clinical Examination
+  const handleSaveExamination = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCaseForConvert) return;
-    setIsSubmittingConvert(true);
+    if (!examiningCase) return;
 
-    const payload = {
-      name: convName.trim() || 'Verified Emergency Admitted Patient',
-      age: convAge ? Number(convAge) : '35',
-      gender: convGender,
-      contact: convPhone.trim() || '+91 90000 00000',
-      email: convEmail.trim(),
-      address: convAddress.trim() || 'Admitted to Inpatient Ward',
-      emergency_contact: convEmergencyContact.trim() || 'Family on record',
-      user_id: currentUser?.id || 'staff-1',
-      user_name: currentUser?.name || 'Admitting Receptionist',
-      user_role: currentUser?.role || 'receptionist',
+    setIsSavingExam(true);
+    VibrationService.triggerQuickTap();
+
+    const now = new Date().toISOString();
+    const consultation: Consultation = {
+      id: generateId('cons'),
+      patient_id: examiningCase.patient_profile_id,
+      doctor_id: activeStaffUser.id,
+      doctor_name: activeStaffUser.name,
+      date: now,
+      chief_complaint: examiningCase.condition_text,
+      present_illness: `Emergency triage acuity: ${examiningCase.triage_tag.toUpperCase()}`,
+      medical_history: 'Documented via Emergency Fast Admit intake',
+      family_history: 'Non-contributory (Emergency intake)',
+      lifestyle_history: 'Unspecified',
+      physical_examination: `Vitals: BP ${bpValue} mmHg, HR ${hrValue} bpm, SpO2 ${spo2Value}%, Temp ${tempValue}°F`,
+      observations: `Bed Reserved: ${examiningCase.assigned_hospital} Emergency Bay`,
+      clinical_notes: clinicalNotes,
+      symptoms: [
+        {
+          id: generateId('sym'),
+          symptom_name: examiningCase.condition_text,
+          duration: 'Acute onset',
+          severity: 'Critical',
+        }
+      ],
+      doctor_approved: true,
+      diagnosis: diagnosisText || 'Clinical assessment documented',
+      prescriptions: prescriptions,
+      created_at: now,
     };
 
-    const targetPatientId = selectedCaseForConvert.patient_profile_id;
+    const existingConsultations = LocalClinicalStorage.getConsultations();
+    LocalClinicalStorage.setConsultations([consultation, ...existingConsultations]);
 
-    try {
-      if (!isOfflineMode) {
-        const res = await fetch(`/patients/${targetPatientId}/convert`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          onPatientConverted(data.patient);
-          setConvertSuccessMsg(`Successfully converted shell into verified patient profile ${data.patient.patient_id}!`);
-          setIsSubmittingConvert(false);
-          setTimeout(() => setSelectedCaseForConvert(null), 1200);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Network convert failed, applying local conversion:', err);
+    // Also transition status to admitted if it was arrived
+    if (examiningCase.status === 'arrived' || examiningCase.status === 'en_route') {
+      handleUpdateStatus(examiningCase.id, 'admitted');
     }
 
-    // Local / Offline fallback
-    const allPatients = LocalClinicalStorage.getPatients();
-    const idx = allPatients.findIndex(p => p.id === targetPatientId || p.patient_id === targetPatientId);
-    if (idx !== -1) {
-      allPatients[idx] = {
-        ...allPatients[idx],
-        name: payload.name,
-        age: payload.age,
-        gender: payload.gender,
-        contact: payload.contact,
-        email: payload.email,
-        address: payload.address,
-        emergency_contact: payload.emergency_contact,
-        is_emergency_shell: false,
-        updated_at: new Date().toISOString(),
-      };
-      LocalClinicalStorage.setPatients(allPatients);
-      secureLocalDB.savePatient(allPatients[idx], true);
-      onPatientConverted(allPatients[idx]);
-    }
-
-    // Update emergency case status locally
-    const updated = cases.map(c => c.id === selectedCaseForConvert.id ? { ...c, status: 'converted' as EmergencyStatus } : c);
-    setCases(updated);
-    LocalClinicalStorage.setEmergencyCases(updated);
-    secureLocalDB.updateEmergencyCaseStatus(selectedCaseForConvert.id, 'converted', true);
-
-    LocalClinicalStorage.logAuditAction(
-      currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : { id: 'staff', name: 'Hospital Staff', role: 'receptionist' },
-      'PATIENT_CONVERTED',
-      targetPatientId,
-      `Staff converted emergency shell ${selectedCaseForConvert.patient_profile_id} to real patient ${payload.name}`
-    );
-
-    setConvertSuccessMsg(`Shell successfully converted to permanent patient profile!`);
-    setIsSubmittingConvert(false);
-    setTimeout(() => setSelectedCaseForConvert(null), 1200);
+    setStatusFeedback(`Clinical examination & orders recorded for Case #${examiningCase.id}`);
+    setIsSavingExam(false);
+    setExaminingCase(null);
   };
 
-  // Filter cases logic
+  const handleAddPrescription = (med: string) => {
+    if (!med.trim()) return;
+    setPrescriptions(prev => [...prev, med.trim()]);
+    setNewPrescriptionInput('');
+  };
+
+  const handleRemovePrescription = (index: number) => {
+    setPrescriptions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Filtered cases
   const filteredCases = cases.filter(c => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
-    if (staffFilter === 'assigned_to_me') {
-      return c.assigned_staff_id === currentUser?.id;
-    }
-    if (staffFilter === 'unassigned') {
-      return !c.assigned_staff_id;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const patient = patients.find(p => p.id === c.patient_profile_id);
+      const matchName = patient?.name.toLowerCase().includes(q);
+      const matchId = c.id.toLowerCase().includes(q);
+      const matchCond = c.condition_text.toLowerCase().includes(q);
+      const matchHosp = c.assigned_hospital?.toLowerCase().includes(q);
+      if (!matchName && !matchId && !matchCond && !matchHosp) return false;
     }
     return true;
   });
 
-  // Render Secured Lock Screen if not authorized
-  if (!isAuthorized) {
-    return (
-      <div className="w-full max-w-4xl mx-auto px-4 py-16" id="unauthorized-lock-screen">
-        <div className="bg-neutral-950 border border-red-900/60 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 mx-auto bg-neutral-900 border border-red-800 rounded-full flex items-center justify-center text-red-500">
-            <Lock className="w-8 h-8" />
-          </div>
-          <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-red-950/50 border border-red-800/80 rounded-full text-red-400 text-xs font-mono uppercase tracking-widest mb-3">
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Clearance Restricted • Staff Only</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Hospital Staff Clearance Required
-            </h2>
-            <p className="text-neutral-400 text-sm max-w-xl mx-auto mt-2 leading-relaxed">
-              This dashboard provides real-time access to emergency triage tags and incoming casualty feeds. Current role: <strong className="text-red-400 font-mono">{currentUser?.role.toUpperCase() || 'UNAUTHENTICATED'}</strong>.
-            </p>
-          </div>
+  const getTriageBadge = (tag: string) => {
+    switch (tag) {
+      case 'cardiac':
+        return {
+          bg: 'bg-rose-50 text-rose-700 border-rose-200',
+          label: 'Code Red • Cardiac',
+          dot: 'bg-rose-600',
+        };
+      case 'trauma':
+        return {
+          bg: 'bg-amber-50 text-amber-700 border-amber-200',
+          label: 'Immediate • Trauma',
+          dot: 'bg-amber-600',
+        };
+      case 'respiratory':
+        return {
+          bg: 'bg-rose-50 text-rose-700 border-rose-200',
+          label: 'Code Red • Respiratory',
+          dot: 'bg-rose-600',
+        };
+      case 'stroke':
+        return {
+          bg: 'bg-purple-50 text-purple-700 border-purple-200',
+          label: 'Critical • Stroke',
+          dot: 'bg-purple-600',
+        };
+      default:
+        return {
+          bg: 'bg-sky-50 text-sky-700 border-sky-200',
+          label: 'Urgent Triage',
+          dot: 'bg-sky-600',
+        };
+    }
+  };
 
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-xl text-xs font-mono text-neutral-300 max-w-md mx-auto text-left space-y-2">
-            <div className="text-neutral-400 font-semibold uppercase text-[10px] tracking-wider">Authorized Role Profiles:</div>
-            <div className="flex items-center space-x-2 text-green-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Attending Physicians & Emergency Doctors</span>
-            </div>
-            <div className="flex items-center space-x-2 text-green-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Emergency Triage & Admitting Receptionists</span>
-            </div>
-            <div className="flex items-center space-x-2 text-green-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Hospital Security & Compliance Administrators</span>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <p className="text-xs text-neutral-500 font-mono mb-4">
-              To proceed, switch your active session role using the role selector in the top-right header navigation.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getStatusBadge = (status: EmergencyStatus) => {
+    switch (status) {
+      case 'pending':
+        return { bg: 'bg-rose-50 text-rose-700 border-rose-200', label: 'Pending Dispatch' };
+      case 'en_route':
+        return { bg: 'bg-sky-50 text-sky-700 border-sky-200', label: 'Ambulance En Route' };
+      case 'arrived':
+        return { bg: 'bg-amber-50 text-amber-800 border-amber-200', label: 'Arrived at ER Bay' };
+      case 'admitted':
+        return { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Admitted to Bed' };
+      case 'converted':
+        return { bg: 'bg-slate-100 text-slate-700 border-slate-200', label: 'Profile Registered' };
+      default:
+        return { bg: 'bg-slate-100 text-slate-700 border-slate-200', label: status };
+    }
+  };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8" id="hospital-dashboard-container">
-      {/* Header & Status Bar */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-neutral-950 border border-neutral-900 rounded-xl p-6 shadow-sm">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-slate-800" id="hospital-dashboard">
+      
+      {/* HEADER SECTION: Clean, High-Contrast Healthcare Top Bar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-            <span className="text-[10px] font-mono text-red-400 uppercase tracking-widest flex items-center space-x-1.5 font-bold">
-              <span>LIVE EMERGENCY OPERATIONS FEED</span>
-              <span className="text-neutral-600">•</span>
-              <span className="text-neutral-400">SYNC: {lastRefreshed}</span>
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
+            </span>
+            <span className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider">
+              Live ER Operations • Sync: {lastRefreshed}
             </span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
-            Intake & Dispatch Queue
-          </h2>
-          <p className="text-xs font-mono text-neutral-400 mt-1">
-            Real-time emergency triage feed. Assign staff, update transit statuses, and convert shell intakes.
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-1">
+            Emergency Triage & Casualty Intake Board
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Monitor incoming ambulances, manage ER bed reservations, and record rapid clinical exams.
           </p>
         </div>
 
-        {/* Action Controls & Filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Action Controls & Active Staff Selector */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          {/* Active Persona Pill */}
+          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700">
+            <UserCheck className="w-3.5 h-3.5 text-sky-600" />
+            <span className="font-semibold text-slate-900">{activeStaffUser.name}</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">({activeStaffUser.role})</span>
+          </div>
+
+          {/* Quick Persona Switcher */}
+          <select 
+            value={activeStaffUser.id}
+            onChange={(e) => {
+              const selected = INITIAL_USERS.find(u => u.id === e.target.value);
+              if (selected) setActiveStaffUser(selected);
+            }}
+            className="bg-white border border-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-sky-500 focus:outline-none"
+            aria-label="Switch staff role"
+          >
+            {INITIAL_USERS.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.role})
+              </option>
+            ))}
+          </select>
+
           {/* Refresh Button */}
           <button
+            type="button"
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="px-3 py-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-xs font-mono text-neutral-300 flex items-center space-x-1.5 transition-colors cursor-pointer"
-            title="Poll server for new emergency cases"
+            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
+            title="Poll server for live updates"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-red-400' : 'text-neutral-400'}`} />
-            <span>{isRefreshing ? 'Syncing...' : 'Poll Updates'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-sky-600' : 'text-slate-500'}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
           </button>
-
-          {/* Staff Filter Tabs */}
-          <div className="flex items-center space-x-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800 text-xs font-mono">
-            <button
-              onClick={() => setStaffFilter('all')}
-              className={`px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-medium cursor-pointer ${
-                staffFilter === 'all' ? 'bg-neutral-800 text-white font-bold' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              All Staff ({cases.length})
-            </button>
-            <button
-              onClick={() => setStaffFilter('assigned_to_me')}
-              className={`px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-medium cursor-pointer ${
-                staffFilter === 'assigned_to_me' ? 'bg-red-600 text-white font-bold' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Assigned To Me ({cases.filter(c => c.assigned_staff_id === currentUser?.id).length})
-            </button>
-            <button
-              onClick={() => setStaffFilter('unassigned')}
-              className={`px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-medium cursor-pointer ${
-                staffFilter === 'unassigned' ? 'bg-neutral-800 text-red-400 font-bold' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Unassigned ({cases.filter(c => !c.assigned_staff_id).length})
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Live Feedback Banner */}
+      {/* Feedback Banner */}
       {statusFeedback && (
-        <div className="bg-neutral-950 border border-red-800 text-red-300 px-4 py-2 rounded-lg text-xs font-mono flex items-center space-x-2 animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 text-red-400" />
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-2 animate-in fade-in duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{statusFeedback}</span>
         </div>
       )}
 
-      {/* Status Filter Tabs */}
-      <div className="flex items-center space-x-1 overflow-x-auto pb-1 border-b border-neutral-900 text-xs font-mono">
-        {[
-          { id: 'all', label: 'All Cases' },
-          { id: 'pending', label: 'Pending Dispatch' },
-          { id: 'assigned', label: 'Staff Assigned' },
-          { id: 'en_route', label: 'Ambulance En Route' },
-          { id: 'arrived', label: 'Arrived at ER' },
-          { id: 'converted', label: 'Converted Profile' },
-        ].map(tab => {
-          const count = tab.id === 'all' ? cases.length : cases.filter(c => c.status === tab.id).length;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setFilterStatus(tab.id)}
-              className={`px-3 py-2 border-b-2 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
-                filterStatus === tab.id 
-                  ? 'border-red-600 text-red-400 font-bold' 
-                  : 'border-transparent text-neutral-400 hover:text-white'
-              }`}
+      {/* SEARCH & STATUS FILTER TABS */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
+          {[
+            { id: 'all', label: 'All Cases' },
+            { id: 'pending', label: 'Pending' },
+            { id: 'en_route', label: 'En Route' },
+            { id: 'arrived', label: 'Arrived at ER' },
+            { id: 'admitted', label: 'Admitted' },
+          ].map(tab => {
+            const count = tab.id === 'all' ? cases.length : cases.filter(c => c.status === tab.id).length;
+            const isActive = filterStatus === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  VibrationService.triggerQuickTap();
+                  setFilterStatus(tab.id);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80'
+                }`}
+              >
+                {tab.label} <span className="text-[10px] opacity-75 font-normal ml-1">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search patient, ID, or condition..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
-              {tab.label} <span className="text-[10px] opacity-70">({count})</span>
+              <X className="w-3 h-3" />
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
 
-      {/* Emergency Cases Grid */}
+      {/* EMERGENCY CASES GRID */}
       {filteredCases.length === 0 ? (
-        <div className="text-center py-16 bg-neutral-950 border border-neutral-900 rounded-xl space-y-3">
-          <CheckCircle2 className="w-10 h-10 text-neutral-600 mx-auto" />
-          <h3 className="text-base font-semibold text-white">No Emergency Cases in this Category</h3>
-          <p className="text-xs text-neutral-400 font-mono">
-            There are currently no cases matching the filter criteria.
+        <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-8 space-y-3 shadow-xs">
+          <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto" />
+          <h3 className="text-base font-bold text-slate-900">No Emergency Cases in this Category</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            There are currently no cases matching your filters. You can dispatch a simulated emergency anytime from the Emergency SOS tab.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCases.map(ec => {
+            const triageInfo = getTriageBadge(ec.triage_tag);
+            const statusInfo = getStatusBadge(ec.status);
             const associatedPatient = patients.find(p => p.id === ec.patient_profile_id);
-            const isShell = associatedPatient?.is_emergency_shell ?? true;
-
-            const borderLeftColor = 
-              ec.status === 'pending' ? 'border-l-4 border-l-red-600' :
-              ec.status === 'assigned' ? 'border-l-4 border-l-red-400' :
-              ec.status === 'en_route' ? 'border-l-4 border-l-amber-500' :
-              ec.status === 'arrived' ? 'border-l-4 border-l-green-500' :
-              ec.status === 'converted' ? 'border-l-4 border-l-neutral-400' :
-              'border-l-4 border-l-red-600';
 
             return (
               <div
                 key={ec.id}
-                className={`bg-neutral-950 rounded-xl p-5 border border-neutral-900 ${borderLeftColor} flex flex-col justify-between space-y-4 hover:border-neutral-800 transition-colors shadow-sm`}
+                className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between space-y-4"
               >
-                {/* Card Top: Triage Tag, Status & Assignment */}
                 <div>
+                  {/* Top Bar: Triage Acuity Tag & Status Badge */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase flex items-center space-x-1.5 ${
-                      ec.triage_tag === 'cardiac' ? 'bg-red-950/80 text-red-400 border border-red-800/80 font-bold' :
-                      ec.triage_tag === 'trauma' ? 'bg-neutral-900 text-amber-400 border border-amber-900/60 font-bold' :
-                      ec.triage_tag === 'respiratory' ? 'bg-neutral-900 text-red-300 border border-red-900/60 font-bold' :
-                      'bg-neutral-900 text-neutral-400 border border-neutral-800'
-                    }`}>
-                      {ec.triage_tag === 'cardiac' && <Heart className="w-3 h-3 text-red-500" />}
-                      {ec.triage_tag === 'trauma' && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-                      {ec.triage_tag === 'respiratory' && <Activity className="w-3 h-3 text-red-400" />}
-                      <span>{ec.triage_tag}</span>
+                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border flex items-center space-x-1.5 ${triageInfo.bg}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${triageInfo.dot}`}></span>
+                      <span>{triageInfo.label}</span>
                     </span>
 
-                    {/* Status Dropdown */}
-                    <div className="relative">
-                      <select
-                        value={ec.status}
-                        onChange={(e) => handleUpdateStatus(ec.id, e.target.value as EmergencyStatus)}
-                        className={`text-[9px] font-mono px-2 py-1 rounded uppercase border outline-none cursor-pointer ${
-                          ec.status === 'pending' ? 'bg-red-950/80 text-red-300 border-red-800/80 font-bold' :
-                          ec.status === 'assigned' ? 'bg-neutral-900 text-red-400 border-neutral-800 font-bold' :
-                          ec.status === 'en_route' ? 'bg-neutral-900 text-amber-400 border-neutral-800 font-bold' :
-                          ec.status === 'arrived' ? 'bg-neutral-900 text-green-400 border-neutral-800 font-bold' :
-                          ec.status === 'converted' ? 'bg-neutral-900 text-neutral-300 border-neutral-800' :
-                          'bg-neutral-900 text-neutral-300 border-neutral-800'
-                        }`}
-                      >
-                        <option value="pending" className="bg-neutral-950 text-neutral-100">PENDING</option>
-                        <option value="assigned" className="bg-neutral-950 text-neutral-100">ASSIGNED</option>
-                        <option value="en_route" className="bg-neutral-950 text-neutral-100">EN ROUTE</option>
-                        <option value="arrived" className="bg-neutral-950 text-neutral-100">ARRIVED AT ER</option>
-                        <option value="converted" className="bg-neutral-950 text-neutral-100">CONVERTED</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Case Title & ETA */}
-                  <div className="flex items-baseline justify-between">
-                    <h3 className="text-sm font-bold text-white tracking-tight font-mono">
-                      {ec.id}
-                    </h3>
-                    <span className="text-xs text-red-400 font-mono flex items-center space-x-1">
-                      <Clock className="w-3 h-3 text-red-500" />
-                      <span>ETA ~{ec.eta_minutes}m ({ec.distance_km}km)</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${statusInfo.bg}`}>
+                      {statusInfo.label}
                     </span>
                   </div>
 
-                  {/* Patient Shell Information */}
-                  <div className="text-xs text-neutral-400 mt-1 flex items-center space-x-2 font-mono text-[11px]">
-                    <span>Shell:</span>
-                    <span className="text-red-400 font-semibold">{associatedPatient?.patient_id || ec.patient_profile_id}</span>
-                    {isShell ? (
-                      <span className="text-[9px] bg-neutral-900 text-amber-400 px-1.5 py-0.5 rounded border border-neutral-800 uppercase">
-                        Unverified Shell
-                      </span>
-                    ) : (
-                      <span className="text-[9px] bg-neutral-900 text-green-400 px-1.5 py-0.5 rounded border border-neutral-800 uppercase">
-                        Verified Profile
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Staff Assignment Badge */}
-                  <div className="mt-3 flex items-center justify-between p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <UserCheck className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-                      <span className="text-neutral-400">Assigned:</span>
-                      <span className={`truncate font-semibold ${ec.assigned_staff_name ? 'text-white' : 'text-neutral-500'}`}>
-                        {ec.assigned_staff_name || 'Unassigned'}
-                      </span>
+                  {/* Patient Name & Condition */}
+                  <div>
+                    <div className="flex items-baseline justify-between">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                        {phiMasked ? maskPhi(associatedPatient?.name || 'Emergency Intake', 'name') : (associatedPatient?.name || 'Emergency Intake')}
+                      </h3>
+                      <span className="text-[11px] font-mono text-slate-400">#{ec.id}</span>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedCaseForAssign(ec);
-                        setAssigneeId(ec.assigned_staff_id || currentUser?.id || 'usr-1');
-                      }}
-                      className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider flex-shrink-0 ml-2 cursor-pointer"
-                    >
-                      {ec.assigned_staff_id ? 'Reassign' : 'Assign'}
-                    </button>
-                  </div>
 
-                  {/* Condition Excerpt (Clear Patient Medical Info) */}
-                  <div className="mt-3">
-                    <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                      <span>Initial Condition Report:</span>
-                    </div>
-                    <p className="text-xs text-neutral-200 p-3 rounded-lg bg-neutral-900 border border-neutral-800 leading-relaxed font-sans italic">
-                      "{ec.condition_text}"
+                    <p className="text-xs font-medium text-slate-700 mt-1 line-clamp-2">
+                      {ec.condition_text}
                     </p>
                   </div>
 
-                  {/* Receiving Hospital & Contact Info */}
-                  <div className="text-xs text-neutral-400 mt-3 space-y-1 font-mono text-[11px]">
-                    <div className="flex items-center space-x-1.5 text-neutral-300">
-                      <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                      <span className="truncate">{ec.assigned_hospital}</span>
+                  {/* Metadata Chips: Location, Hospital, ETA */}
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-500">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center space-x-1 text-slate-600">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="truncate max-w-[180px]">{ec.assigned_hospital}</span>
+                      </span>
+                      <span className="font-semibold text-rose-600">
+                        ~{ec.eta_minutes} mins
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-1.5 text-neutral-400">
-                      <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>Caller Contact: {phiMasked ? maskPhi(ec.contact, 'phone') : ec.contact}</span>
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400">Contact / Phone:</span>
+                      <span className="font-mono text-slate-700">{ec.contact || '+91 90000 00000'}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="pt-3 border-t border-neutral-900 flex items-center gap-2">
-                  {isShell ? (
+                {/* Card Actions: 1-Click Status Progression + Clinical Examination */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  
+                  {/* Status Progression Quick Buttons */}
+                  <div className="flex items-center space-x-1 bg-slate-50 p-1 rounded-xl border border-slate-200/80">
                     <button
-                      onClick={() => handleOpenConvertModal(ec)}
-                      className="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 transition-colors cursor-pointer uppercase tracking-wider font-mono text-[11px]"
+                      type="button"
+                      onClick={() => handleUpdateStatus(ec.id, 'en_route')}
+                      className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        ec.status === 'en_route' 
+                          ? 'bg-sky-600 text-white shadow-xs' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Mark ambulance as en route"
                     >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>Convert Shell</span>
+                      En Route
                     </button>
-                  ) : (
                     <button
-                      onClick={() => onOpenConsultation(ec.patient_profile_id)}
-                      className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-xs font-bold py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 border border-neutral-800 uppercase tracking-wider font-mono text-[11px] transition-colors cursor-pointer"
+                      type="button"
+                      onClick={() => handleUpdateStatus(ec.id, 'arrived')}
+                      className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        ec.status === 'arrived' 
+                          ? 'bg-amber-600 text-white shadow-xs' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Mark patient as arrived at emergency bay"
                     >
-                      <FileText className="w-3.5 h-3.5 text-red-400" />
-                      <span>Doctor Intake</span>
+                      Arrived ER
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(ec.id, 'admitted')}
+                      className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        ec.status === 'admitted' 
+                          ? 'bg-emerald-600 text-white shadow-xs' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Admit patient to hospital bed"
+                    >
+                      Admitted
+                    </button>
+                  </div>
 
+                  {/* Primary Doctor Examination Button */}
                   <button
-                    onClick={() => onOpenTimeline(ec.patient_profile_id)}
-                    title="View Longitudinal Timeline"
-                    className="bg-neutral-900 hover:bg-neutral-800 text-neutral-300 p-2 rounded-lg border border-neutral-800 transition-colors cursor-pointer"
+                    type="button"
+                    onClick={() => handleOpenExamination(ec)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <Stethoscope className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Doctor Exam & Vitals</span>
                   </button>
                 </div>
               </div>
@@ -631,226 +513,205 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         </div>
       )}
 
-      {/* ASSIGN STAFF MODAL */}
-      {selectedCaseForAssign && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-neutral-950 border border-neutral-900 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
-              <div>
-                <span className="text-[10px] font-mono text-red-400 uppercase tracking-widest font-bold">
-                  STAFF ROSTER DISPATCH
-                </span>
-                <h3 className="text-lg font-bold text-white tracking-tight">
-                  Assign Emergency Case
-                </h3>
+      {/* DOCTOR CLINICAL EXAMINATION & VITALS MODAL */}
+      {examiningCase && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 border border-sky-200 text-sky-700 flex items-center justify-center">
+                  <Stethoscope className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-700">
+                    Rapid Clinical Examination • Case #{examiningCase.id}
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {examiningCase.patient_name || 'Emergency Intake Patient'}
+                  </h3>
+                </div>
               </div>
+
               <button
-                onClick={() => setSelectedCaseForAssign(null)}
-                className="text-neutral-400 hover:text-white text-sm cursor-pointer"
+                type="button"
+                onClick={() => setExaminingCase(null)}
+                className="w-8 h-8 rounded-xl bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-neutral-300 bg-neutral-900 p-3 rounded-lg border border-neutral-800 font-mono text-[11px]">
-              <span className="text-red-400 font-bold">{selectedCaseForAssign.id}</span> • Triage: <span className="uppercase text-amber-400">{selectedCaseForAssign.triage_tag}</span>
-              <p className="mt-1 text-neutral-400 italic truncate">"{selectedCaseForAssign.condition_text}"</p>
-            </div>
+            {/* Modal Body */}
+            <form onSubmit={handleSaveExamination} className="p-5 space-y-5">
+              
+              {/* Emergency Overview Box */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Chief Emergency Complaint:</span>
+                  <span className="font-semibold text-slate-900">{examiningCase.condition}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Assigned Facility:</span>
+                  <span className="font-semibold text-sky-700">{examiningCase.assigned_hospital}</span>
+                </div>
+              </div>
 
-            <form onSubmit={handleAssignStaffSubmit} className="space-y-4">
+              {/* Vitals Input Grid */}
               <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1.5">
-                  Select Attending Physician / Trauma Staff *
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Emergency Bedside Vitals
                 </label>
-                <div className="space-y-2">
-                  {INITIAL_USERS.map(u => (
-                    <label
-                      key={u.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                        assigneeId === u.id 
-                          ? 'bg-neutral-900 border-red-600 text-white' 
-                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700'
-                      }`}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] font-medium text-slate-400 block">BP (mmHg)</span>
+                    <input
+                      type="text"
+                      value={bpValue}
+                      onChange={(e) => setBpValue(e.target.value)}
+                      className="w-full text-xs font-bold text-slate-900 border-none p-0 focus:outline-none mt-1"
+                      placeholder="120/80"
+                    />
+                  </div>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] font-medium text-slate-400 block">Heart Rate (bpm)</span>
+                    <input
+                      type="text"
+                      value={hrValue}
+                      onChange={(e) => setHrValue(e.target.value)}
+                      className="w-full text-xs font-bold text-slate-900 border-none p-0 focus:outline-none mt-1"
+                      placeholder="88"
+                    />
+                  </div>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] font-medium text-slate-400 block">SpO2 (%)</span>
+                    <input
+                      type="text"
+                      value={spo2Value}
+                      onChange={(e) => setSpo2Value(e.target.value)}
+                      className="w-full text-xs font-bold text-slate-900 border-none p-0 focus:outline-none mt-1"
+                      placeholder="98"
+                    />
+                  </div>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] font-medium text-slate-400 block">Temp (°F)</span>
+                    <input
+                      type="text"
+                      value={tempValue}
+                      onChange={(e) => setTempValue(e.target.value)}
+                      className="w-full text-xs font-bold text-slate-900 border-none p-0 focus:outline-none mt-1"
+                      placeholder="98.6"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Working Clinical Diagnosis */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Clinical Working Diagnosis
+                </label>
+                <input
+                  type="text"
+                  value={diagnosisText}
+                  onChange={(e) => setDiagnosisText(e.target.value)}
+                  placeholder="e.g. Acute Coronary Syndrome / NSTEMI"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              {/* Physician Assessment Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Attending Physician Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={clinicalNotes}
+                  onChange={(e) => setClinicalNotes(e.target.value)}
+                  placeholder="Enter clinical examination findings..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              {/* Prescriptions & Emergency Orders */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Emergency Orders & Prescriptions
+                </label>
+                
+                {/* List of orders */}
+                <div className="space-y-1.5 mb-2 max-h-28 overflow-y-auto">
+                  {prescriptions.map((p, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                      <span className="text-slate-800 font-medium">{p}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePrescription(idx)}
+                        className="text-slate-400 hover:text-rose-600 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick Add Prescriptions */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Add medication or emergency order..."
+                    value={newPrescriptionInput}
+                    onChange={(e) => setNewPrescriptionInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddPrescription(newPrescriptionInput);
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddPrescription(newPrescriptionInput)}
+                    className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200 cursor-pointer"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {/* Preset Suggestions */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {['Aspirin 325mg chewable', 'Nitroglycerin 0.4mg SL', 'Oxygen 4L/min', 'Stat ECG 12-lead'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleAddPrescription(preset)}
+                      className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-600 cursor-pointer transition-colors"
                     >
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="radio"
-                          name="staffAssignee"
-                          value={u.id}
-                          checked={assigneeId === u.id}
-                          onChange={(e) => setAssigneeId(e.target.value)}
-                          className="text-red-600 focus:ring-0"
-                        />
-                        <div>
-                          <div className="text-xs font-semibold text-white">{u.name}</div>
-                          <div className="text-[10px] text-neutral-400 font-mono">{u.department || u.role.toUpperCase()}</div>
-                        </div>
-                      </div>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded uppercase bg-neutral-950 text-neutral-400 border border-neutral-800">
-                        {u.role}
-                      </span>
-                    </label>
+                      + {preset}
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-neutral-900">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setSelectedCaseForAssign(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-mono text-neutral-400 hover:text-white uppercase cursor-pointer"
+                  onClick={() => setExaminingCase(null)}
+                  className="py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isAssigning}
-                  className="bg-red-600 hover:bg-red-500 disabled:bg-neutral-800 text-white px-4 py-2 rounded-lg text-xs font-mono uppercase tracking-wider flex items-center space-x-1.5 transition-colors cursor-pointer font-bold"
+                  disabled={isSavingExam}
+                  className="py-2 px-5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors"
                 >
-                  {isAssigning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
-                  <span>Confirm Assignment</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CONVERT SHELL TO REAL PATIENT PROFILE MODAL */}
-      {selectedCaseForConvert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-neutral-950 border border-neutral-900 rounded-xl max-w-lg w-full p-6 space-y-4 my-8 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
-              <div>
-                <span className="text-[10px] font-mono text-red-400 uppercase tracking-widest font-bold">
-                  STAFF CONVERSION WORKFLOW
-                </span>
-                <h3 className="text-lg font-bold text-white tracking-tight">
-                  Convert Shell to Permanent Record
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedCaseForConvert(null)}
-                className="text-neutral-400 hover:text-white text-sm cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="text-xs text-neutral-300 bg-neutral-900 p-3 rounded-lg border border-neutral-800 font-mono text-[11px]">
-              <span className="text-red-400 font-bold">Emergency Ref:</span> {selectedCaseForConvert.id} • Shell ID: <code className="text-red-400">{selectedCaseForConvert.patient_profile_id}</code>
-            </div>
-
-            {convertSuccessMsg && (
-              <div className="bg-neutral-900 border border-green-800/60 text-green-300 text-xs p-3 rounded-lg flex items-center space-x-2 font-mono">
-                <CheckCircle2 className="w-4 h-4 text-green-400" />
-                <span>{convertSuccessMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleConvertSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Full Name *</label>
-                  <input
-                    required
-                    type="text"
-                    value={convName}
-                    onChange={(e) => setConvName(e.target.value)}
-                    placeholder="e.g. Ramesh Chandra Verma"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Age *</label>
-                  <input
-                    required
-                    type="text"
-                    value={convAge}
-                    onChange={(e) => setConvAge(e.target.value)}
-                    placeholder="e.g. 52"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Gender</label>
-                  <select
-                    value={convGender}
-                    onChange={(e) => setConvGender(e.target.value as any)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none"
-                  >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                    <option value="Undisclosed">Undisclosed</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Verified Phone *</label>
-                  <input
-                    required
-                    type="tel"
-                    value={convPhone}
-                    onChange={(e) => setConvPhone(e.target.value)}
-                    placeholder="+91 98112 00000"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={convEmail}
-                  onChange={(e) => setConvEmail(e.target.value)}
-                  placeholder="patient@example.com"
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Home Residential Address</label>
-                <input
-                  type="text"
-                  value={convAddress}
-                  onChange={(e) => setConvAddress(e.target.value)}
-                  placeholder="Street, locality, city"
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">Emergency Contact / Relative</label>
-                <input
-                  type="text"
-                  value={convEmergencyContact}
-                  onChange={(e) => setConvEmergencyContact(e.target.value)}
-                  placeholder="e.g. +91 98112 11111 (Wife)"
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:border-red-600 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-neutral-900">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCaseForConvert(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-mono text-neutral-400 hover:text-white uppercase cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingConvert}
-                  className="bg-red-600 hover:bg-red-500 disabled:bg-neutral-900 text-white px-4 py-2 rounded-lg text-xs font-mono uppercase tracking-wider flex items-center space-x-1.5 transition-colors cursor-pointer font-bold"
-                >
-                  {isSubmittingConvert ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                  <span>Save & Convert</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSavingExam ? 'Saving...' : 'Save & Sign Exam'}</span>
                 </button>
               </div>
             </form>

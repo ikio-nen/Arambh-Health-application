@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Building2, Activity, FileText } from 'lucide-react';
+import { Zap, Building2, Activity, Bot, Shield } from 'lucide-react';
 import { VibrationService } from '../services/vibrationService';
 
 interface MobileBottomNavProps {
@@ -34,6 +34,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       iconClass: 'text-sky-600',
     },
     {
+      id: 'fall_guard',
+      label: 'Fall Guard',
+      icon: Shield,
+      activeColor: 'text-emerald-700 font-bold',
+      iconClass: 'text-emerald-600',
+    },
+    {
       id: 'dashboard',
       label: 'ER Board',
       icon: Activity,
@@ -42,11 +49,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       badge: pendingEmergencyCount > 0 ? pendingEmergencyCount : undefined,
     },
     {
-      id: 'case_taking',
-      label: 'Records',
-      icon: FileText,
-      activeColor: 'text-slate-900 font-bold',
-      iconClass: 'text-slate-900',
+      id: 'ai_chatbot',
+      label: 'AI Helper',
+      icon: Bot,
+      activeColor: 'text-sky-600 font-bold',
+      iconClass: 'text-sky-600',
     },
   ];
 
@@ -56,7 +63,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 select-none pb-safe"
       id="mobile-bottom-navigation"
     >
-      <div className="grid grid-cols-4 h-14 items-center px-2">
+      <div className="grid grid-cols-5 h-14 items-center px-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;

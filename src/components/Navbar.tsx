@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Zap, Building2, Activity, FileText, User, Menu, X, 
-  Wifi, WifiOff, ShieldCheck 
+  Zap, Building2, Activity, Bot, User, Menu, X, 
+  Wifi, WifiOff, ShieldCheck, Shield 
 } from 'lucide-react';
 import { User as SystemUser } from '../types';
 import { VibrationService } from '../services/vibrationService';
@@ -61,6 +61,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       iconColor: 'text-sky-600',
     },
     {
+      id: 'fall_guard',
+      label: 'Fall Guard',
+      icon: Shield,
+      activeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200/80 font-semibold',
+      iconColor: 'text-emerald-600',
+    },
+    {
       id: 'dashboard',
       label: 'ER Triage Board',
       icon: Activity,
@@ -69,11 +76,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       badge: pendingEmergencyCount > 0 ? pendingEmergencyCount : undefined,
     },
     {
-      id: 'case_taking',
-      label: 'Doctor Records',
-      icon: FileText,
+      id: 'ai_chatbot',
+      label: 'AI Assistant',
+      icon: Bot,
       activeColor: 'bg-slate-100 text-slate-900 border-slate-300 font-semibold',
-      iconColor: 'text-slate-700',
+      iconColor: 'text-sky-600',
     },
   ];
 

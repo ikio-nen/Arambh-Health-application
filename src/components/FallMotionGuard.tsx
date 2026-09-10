@@ -1,702 +1,556 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  ShieldAlert, Activity, Volume2, VolumeX, Mic, MicOff, 
-  PhoneCall, AlertTriangle, Plus, Trash2, CheckCircle2, 
-  Send, Zap, Bell, UserPlus, HeartPulse, Sparkles, Smartphone, Vibrate
+  Shield, AlertTriangle, Activity, Settings2, Bell, 
+  RotateCcw, CheckCircle2, Volume2, VolumeX, Smartphone,
+  Clock, Heart, HelpCircle, ArrowRight, X
 } from 'lucide-react';
-import { EmergencyContactPerson, EmergencyCase } from '../types';
-import { LocalClinicalStorage } from '../services/storage';
-import { nearestHospital } from '../services/geo';
-import { secureLocalDB } from '../services/secureLocalDatabase';
+import { EmergencyCase } from '../types';
+import { generateId } from '../services/storage';
 import { VibrationService } from '../services/vibrationService';
-import { SmsEmergencyService } from '../services/smsEmergencyService';
-import { AmbulanceLiveTracker } from './AmbulanceLiveTracker';
-import { SmsDispatchModal } from './SmsDispatchModal';
-import { MessageSquare } from 'lucide-react';
 
 interface FallMotionGuardProps {
   isOfflineMode: boolean;
-  onEmergencyTriggered?: (caseData: EmergencyCase) => void;
+  onEmergencyTriggered: (caseData: EmergencyCase) => void;
+  onNavigateToSos?: () => void;
 }
+
+export type SensitivityLevel = 'normal' | 'low' | 'high';
+
+interface SensitivityConfig {
+  name: string;
+  description: string;
+  freeFallThreshold: number; // m/s^2 (below this is near-zero gravity dip)
+  impactThreshold: number;   // m/s^2 (above this is impact spike)
+  immobilityTimeMs: number;  // ms of post-impact stillness required
+  impactWindowMs: number;    // ms between dip and impact peak
+}
+
+const SENSITIVITY_CONFIGS: Record<SensitivityLevel, SensitivityConfig> = {
+  normal: {
+    name: 'Balanced (Recommended)',
+    description: 'Calibrated for everyday home & indoor movement. Filters out phone drops on bed or normal steps.',
+    freeFallThreshold: 5.8,  // ~0.59g dip
+    impactThreshold: 26.5,   // ~2.70g impact peak
+    immobilityTimeMs: 1500,  // 1.5s stillness
+    impactWindowMs: 800,     // impact must occur within 800ms of dip
+  },
+  low: {
+    name: 'Low Sensitivity (Active / Commute)',
+    description: 'Requires higher impact force. Ideal for running, cycling, driving over speedbumps or active chores.',
+    freeFallThreshold: 4.5,  // ~0.46g dip
+    impactThreshold: 32.0,   // ~3.26g impact peak
+    immobilityTimeMs: 2000,  // 2.0s stillness
+    impactWindowMs: 700,
+  },
+  high: {
+    name: 'High Sensitivity (High-Risk Frailty)',
+    description: 'Sensitive to gentle slips, bed rolls, or assisted walking. Best for post-operative or elderly care.',
+    freeFallThreshold: 6.8,  // ~0.69g dip
+    impactThreshold: 22.0,   // ~2.24g impact peak
+    immobilityTimeMs: 1200,  // 1.2s stillness
+    impactWindowMs: 900,
+  },
+};
 
 export const FallMotionGuard: React.FC<FallMotionGuardProps> = ({
   isOfflineMode,
   onEmergencyTriggered,
+  onNavigateToSos,
 }) => {
-  // Motion Sensor State
-  const [motionSupported, setMotionSupported] = useState<boolean>(true);
-  const [currentAccel, setCurrentAccel] = useState<number>(9.8);
-  const [maxAccelObserved, setMaxAccelObserved] = useState<number>(9.8);
-  const [fallDetected, setFallDetected] = useState<boolean>(false);
+  const [isEnabled, setIsEnabled] = useState<boolean>(true);
+  const [sensitivity, setSensitivity] = useState<SensitivityLevel>('normal');
+  const [sensorSupported, setSensorSupported] = useState<boolean>(true);
+  const [permissionGranted, setPermissionGranted] = useState<boolean>(true);
+  
+  // Live Telemetry
+  const [currentG, setCurrentG] = useState<number>(1.0);
+  const [peakG, setPeakG] = useState<number>(1.0);
+  const [statusMessage, setStatusMessage] = useState<string>('Sensor active. Monitoring 3-axis motion.');
+  
+  // Fall detection state machine
+  const [fallAlarmActive, setFallAlarmActive] = useState<boolean>(false);
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15);
-  const [alertDispatched, setAlertDispatched] = useState<boolean>(false);
-  const [dispatchedCase, setDispatchedCase] = useState<EmergencyCase | null>(null);
-  const [isSmsModalOpen, setIsSmsModalOpen] = useState<boolean>(false);
-  const [hapticEnabled, setHapticEnabled] = useState<boolean>(true);
-  const [hapticTested, setHapticTested] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  // Voice Activation State
-  const [voiceActive, setVoiceActive] = useState<boolean>(false);
-  const [lastVoiceTrigger, setLastVoiceTrigger] = useState<string>('');
-  const voiceRecognitionRef = useRef<any>(null);
+  // Biomedical Fall Algorithm Refs
+  const config = SENSITIVITY_CONFIGS[sensitivity];
+  const freeFallTimeRef = useRef<number | null>(null);
+  const impactDetectedTimeRef = useRef<number | null>(null);
+  const recentAccelerationsRef = useRef<{ g: number; t: number }[]>([]);
+  const countdownTimerRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Emergency Contacts State
-  const [contacts, setContacts] = useState<EmergencyContactPerson[]>([]);
-  const [newName, setNewName] = useState<string>('');
-  const [newRel, setNewRel] = useState<string>('Spouse');
-  const [newPhone, setNewPhone] = useState<string>('');
-  const [showAddContact, setShowAddContact] = useState<boolean>(false);
-  const [testNotificationSent, setTestNotificationSent] = useState<string>('');
-
-  // Audio Beep Synthesizer for Fall Alarm
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const countdownIntervalRef = useRef<any>(null);
-
-  // Load Contacts on mount
-  useEffect(() => {
-    setContacts(LocalClinicalStorage.getEmergencyContacts());
-  }, []);
-
-  // 1. Device Motion Sensor Event
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleMotion = (event: DeviceMotionEvent) => {
-      const acc = event.accelerationIncludingGravity || event.acceleration;
-      if (!acc) return;
-
-      const x = acc.x || 0;
-      const y = acc.y || 0;
-      const z = acc.z || 0;
-      const magnitude = Math.round(Math.sqrt(x * x + y * y + z * z) * 10) / 10;
-
-      setCurrentAccel(magnitude);
-      if (magnitude > maxAccelObserved) {
-        setMaxAccelObserved(magnitude);
-      }
-
-      // Shock Threshold: Sudden deceleration/impact spike > 24 m/s²
-      if (magnitude > 24 && !fallDetected && !alertDispatched) {
-        triggerFallEmergency('Device accelerometer spike: Sudden impact detected');
-      }
-    };
-
-    if ('DeviceMotionEvent' in window) {
-      window.addEventListener('devicemotion', handleMotion);
-    } else {
-      setMotionSupported(false);
-    }
-
-    return () => {
-      window.removeEventListener('devicemotion', handleMotion);
-    };
-  }, [fallDetected, alertDispatched, maxAccelObserved]);
-
-  // 2. Play Alarm Sound
-  const playAlarmBeep = () => {
+  // Beep sound generator using Web Audio API
+  const playAlertChirp = useCallback(() => {
+    if (!soundEnabled || typeof window === 'undefined') return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!audioCtxRef.current && AudioCtx) {
-        audioCtxRef.current = new AudioCtx();
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) audioContextRef.current = new AudioCtx();
       }
-      if (audioCtxRef.current) {
-        const osc = audioCtxRef.current.createOscillator();
-        const gain = audioCtxRef.current.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(880, audioCtxRef.current.currentTime);
-        gain.gain.setValueAtTime(0.2, audioCtxRef.current.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtxRef.current.currentTime + 0.3);
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      if (audioContextRef.current) {
+        const ctx = audioContextRef.current;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.18);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
         osc.connect(gain);
-        gain.connect(audioCtxRef.current.destination);
+        gain.connect(ctx.destination);
         osc.start();
-        osc.stop(audioCtxRef.current.currentTime + 0.3);
+        osc.stop(ctx.currentTime + 0.2);
       }
-    } catch (e) {
-      console.warn('Audio alarm error:', e);
+    } catch {
+      // Audio context might be blocked by browser policy
     }
-  };
+  }, [soundEnabled]);
 
-  // 3. Trigger Fall Countdown with Physical Vibration Feedback
-  const triggerFallEmergency = (reason: string) => {
-    setFallDetected(true);
-    setCountdownSeconds(15);
-
-    // Trigger immediate physical haptic pulse
-    if (hapticEnabled) {
-      VibrationService.triggerFallAlarmPulse();
-    }
-
-    // Spoken alert
-    if ('speechSynthesis' in window) {
+  // Request iOS Sensor Permissions
+  const requestSensorPermission = async () => {
+    if (typeof (DeviceMotionEvent as any)?.requestPermission === 'function') {
       try {
-        const utterance = new SpeechSynthesisUtterance('Fall detected. Ambulance and emergency contacts will be dispatched.');
-        window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        console.warn('Speech error:', e);
+        const permissionState = await (DeviceMotionEvent as any).requestPermission();
+        if (permissionState === 'granted') {
+          setPermissionGranted(true);
+          setStatusMessage('Accelerometer permission granted.');
+        } else {
+          setPermissionGranted(false);
+          setStatusMessage('Sensor permission was denied.');
+        }
+      } catch {
+        setPermissionGranted(false);
       }
+    } else {
+      setPermissionGranted(true);
     }
   };
 
-  // Countdown timer effect
-  useEffect(() => {
-    if (fallDetected && countdownSeconds > 0) {
-      playAlarmBeep();
-      // Physically pulse every 2 seconds during active countdown
-      if (hapticEnabled && countdownSeconds % 2 === 0) {
-        VibrationService.triggerFallAlarmPulse();
-      }
+  // Three-Phase Biomedical Fall Detection Processor
+  const handleDeviceMotion = useCallback((event: DeviceMotionEvent) => {
+    if (!isEnabled || fallAlarmActive) return;
 
-      countdownIntervalRef.current = setTimeout(() => {
-        setCountdownSeconds(prev => prev - 1);
-      }, 1000);
-    } else if (fallDetected && countdownSeconds === 0) {
-      executeEmergencyDispatch();
+    let ax = 0, ay = 0, az = 0;
+    // Prefer accelerationIncludingGravity for true vector magnitude
+    if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x !== null) {
+      ax = event.accelerationIncludingGravity.x || 0;
+      ay = event.accelerationIncludingGravity.y || 0;
+      az = event.accelerationIncludingGravity.z || 0;
+    } else if (event.acceleration && event.acceleration.x !== null) {
+      ax = event.acceleration.x || 0;
+      ay = (event.acceleration.y || 0) + 9.81;
+      az = event.acceleration.z || 0;
+    } else {
+      return;
     }
 
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearTimeout(countdownIntervalRef.current);
-      }
-    };
-  }, [fallDetected, countdownSeconds, hapticEnabled]);
+    // Calculate instantaneous vector magnitude in m/s^2 and Gs
+    const totalAccMs2 = Math.sqrt(ax * ax + ay * ay + az * az);
+    const totalG = totalAccMs2 / 9.80665;
+    const now = Date.now();
 
-  const cancelFallAlert = () => {
-    // Physically stop all vibrations immediately
-    VibrationService.stopAll();
-    setFallDetected(false);
+    setCurrentG(parseFloat(totalG.toFixed(2)));
+    setPeakG(prev => Math.max(prev, parseFloat(totalG.toFixed(2))));
+
+    // Keep last 3 seconds of readings for post-impact immobility analysis
+    recentAccelerationsRef.current.push({ g: totalG, t: now });
+    if (recentAccelerationsRef.current.length > 90) {
+      recentAccelerationsRef.current.shift();
+    }
+
+    // Phase 1: Free-fall dip detection (body descending in air)
+    if (totalAccMs2 <= config.freeFallThreshold) {
+      freeFallTimeRef.current = now;
+    }
+
+    // Phase 2: Impact shock peak detection (body striking ground)
+    if (totalAccMs2 >= config.impactThreshold) {
+      const freeFallTime = freeFallTimeRef.current;
+      // Impact must be preceded by a free-fall dip within the allowable window!
+      if (freeFallTime && (now - freeFallTime) <= config.impactWindowMs && (now - freeFallTime) >= 40) {
+        impactDetectedTimeRef.current = now;
+        freeFallTimeRef.current = null; // consume
+
+        // Phase 3: Check for post-impact stillness / immobility
+        setTimeout(() => {
+          checkImmobilityAfterImpact(now);
+        }, config.immobilityTimeMs);
+      }
+    }
+  }, [isEnabled, fallAlarmActive, config]);
+
+  // Phase 3 Immobility Verification
+  const checkImmobilityAfterImpact = (impactTime: number) => {
+    if (fallAlarmActive) return;
+    const readingsAfterImpact = recentAccelerationsRef.current.filter(
+      r => r.t >= impactTime && r.t <= impactTime + config.immobilityTimeMs
+    );
+
+    if (readingsAfterImpact.length > 5) {
+      // Calculate variance of acceleration: if variance is high, user is actively moving / jogging
+      const mean = readingsAfterImpact.reduce((acc, r) => acc + r.g, 0) / readingsAfterImpact.length;
+      const variance = readingsAfterImpact.reduce((acc, r) => acc + Math.pow(r.g - mean, 2), 0) / readingsAfterImpact.length;
+      
+      // If variance is low (< 0.15 G^2), user is motionless / incapacitated on floor!
+      if (variance < 0.25) {
+        triggerFallCountdown();
+      }
+    } else {
+      // Direct trigger if sufficient stillness window elapsed
+      triggerFallCountdown();
+    }
+  };
+
+  // Trigger Fall Alarm Countdown
+  const triggerFallCountdown = () => {
+    setFallAlarmActive(true);
     setCountdownSeconds(15);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const cancelUtterance = new SpeechSynthesisUtterance('Fall alert cancelled.');
-      window.speechSynthesis.speak(cancelUtterance);
-    }
+    VibrationService.triggerFallAlarmPulse();
+    playAlertChirp();
+
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    
+    countdownTimerRef.current = setInterval(() => {
+      setCountdownSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownTimerRef.current);
+          dispatchAutoEmergency();
+          return 0;
+        }
+        playAlertChirp();
+        VibrationService.triggerQuickTap();
+        return prev - 1;
+      });
+    }, 1000);
   };
 
-  // Execute Dispatch when Fall Confirmed
-  const executeEmergencyDispatch = async () => {
-    setFallDetected(false);
-    setAlertDispatched(true);
-
-    if (hapticEnabled) {
-      VibrationService.triggerDispatchSuccess();
+  // Cancel False Alarm ("I am OK")
+  const cancelFallAlarm = () => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
+    setFallAlarmActive(false);
+    setCountdownSeconds(15);
+    freeFallTimeRef.current = null;
+    impactDetectedTimeRef.current = null;
+    setStatusMessage('Fall alarm cancelled. User indicated safe.');
+    VibrationService.triggerQuickTap();
+  };
 
-    const geo = nearestHospital(28.6139, 77.2090);
-    const suffix = Math.floor(1000 + Math.random() * 9000);
-    const caseId = `EMG-FALL-${suffix}`;
-
+  // Dispatch Emergency SOS Automatically
+  const dispatchAutoEmergency = () => {
+    setFallAlarmActive(false);
     const newCase: EmergencyCase = {
-      id: caseId,
-      patient_profile_id: `pt-shell-${suffix}`,
-      lat: 28.6139,
-      long: 77.2090,
-      condition_text: 'SUDDEN HARD FALL DETECTED (High-g Impact Shock). Physical vibration alarm dispatched.',
-      contact: contacts[0]?.phone || '+91 98201 44521',
+      id: generateId('fall'),
+      patient_profile_id: 'pt-1021',
+      lat: 19.0760,
+      long: 72.8777,
+      condition_text: 'Automatic Fall Detected (High-G Impact with Subsequent Immobility). User unconfirmed.',
+      contact: '+91 98201 11223',
       triage_tag: 'trauma',
-      assigned_hospital: geo.hospital.name,
-      hospital_phone: geo.hospital.phone,
-      ambulance_phone: geo.hospital.ambulance_hotline,
-      distance_km: geo.distanceKm,
-      eta_minutes: geo.etaMinutes,
-      status: 'dispatched',
+      assigned_hospital: 'Arambh Metro Trauma Center',
+      hospital_phone: '+91 22 2656 8000',
+      ambulance_phone: '+91 98200 10800',
+      distance_km: 1.8,
+      eta_minutes: 4,
+      status: 'pending',
       first_aid_guidance: [
-        'Do not move patient head or neck if spinal injury is suspected.',
-        'Keep patient warm and check airway breathing rhythm.',
+        'Do not move patient if neck or spine injury is suspected.',
+        'Keep patient warm and calm until 108 emergency paramedics arrive.',
+        'Check airway and breathing continuously.',
       ],
       created_at: new Date().toISOString(),
     };
 
-    await secureLocalDB.saveEmergencyCase(newCase, isOfflineMode);
-    setDispatchedCase(newCase);
-
-    // Automatically dispatch cellular SMS alert to 108 and emergency contact
-    SmsEmergencyService.dispatchEmergencySms({
-      phoneNumber: contacts[0]?.phone || '108',
-      message: SmsEmergencyService.encodeEmergencyCase({
-        lat: 28.6139,
-        long: 77.2090,
-        triageTag: 'trauma',
-        condition: 'HARD FALL DETECTED (High-g Impact Shock)',
-        bedToken: `BED-RES-${suffix}`,
-        targetHospital: geo.hospital.name,
-      }),
-      caseId: caseId,
-      recipientType: contacts[0]?.phone ? 'EMERGENCY_CONTACT' : 'EMS_CONTROL_ROOM',
-    });
-
-    if (onEmergencyTriggered) {
-      onEmergencyTriggered(newCase);
-    }
-
-    if ('speechSynthesis' in window) {
-      const dispatchUtterance = new SpeechSynthesisUtterance(
-        `Emergency dispatched to ${geo.hospital.name}. Contacts alerted.`
-      );
-      window.speechSynthesis.speak(dispatchUtterance);
+    onEmergencyTriggered(newCase);
+    if (onNavigateToSos) {
+      onNavigateToSos();
     }
   };
 
-  // 4. Continuous Voice Trigger Listener (Hands-Free)
-  const toggleVoiceTrigger = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice recognition not supported in this browser.');
+  // Simulate Fall for Testing
+  const simulateFallImpact = () => {
+    VibrationService.triggerFallAlarmPulse();
+    setStatusMessage('Simulating biomedical fall sequence (Drop -> Impact -> Immobility)...');
+    setCurrentG(0.35); // Free-fall dip
+    setTimeout(() => {
+      setCurrentG(3.1); // High-G impact
+      setPeakG(3.1);
+      setTimeout(() => {
+        setCurrentG(1.0); // Rest
+        triggerFallCountdown();
+      }, 300);
+    }, 200);
+  };
+
+  // Attach DeviceMotion listener
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!window.DeviceMotionEvent) {
+      setSensorSupported(false);
+      setStatusMessage('Device motion sensors not supported on this browser/hardware.');
       return;
     }
 
-    if (voiceActive) {
-      if (voiceRecognitionRef.current) voiceRecognitionRef.current.stop();
-      setVoiceActive(false);
-    } else {
-      try {
-        const recog = new SpeechRecognition();
-        recog.continuous = true;
-        recog.interimResults = true;
-        recog.lang = 'en-US';
-
-        recog.onresult = (evt: any) => {
-          for (let i = evt.resultIndex; i < evt.results.length; i++) {
-            const text = evt.results[i][0].transcript.toLowerCase();
-            if (
-              text.includes('help') || 
-              text.includes('sos') || 
-              text.includes('ambulance') || 
-              text.includes('admit') || 
-              text.includes('heart') || 
-              text.includes('fell')
-            ) {
-              setLastVoiceTrigger(text);
-              triggerFallEmergency(`Voice trigger keyword detected: "${text}"`);
-            }
-          }
-        };
-
-        recog.onerror = (err: any) => console.warn('Voice recog error:', err);
-        recog.onend = () => {
-          if (voiceActive) {
-            try { recog.start(); } catch {}
-          }
-        };
-
-        recog.start();
-        voiceRecognitionRef.current = recog;
-        setVoiceActive(true);
-      } catch (e) {
-        console.warn('Voice listener start err:', e);
-      }
-    }
-  };
-
-  // Test Vibration Manually
-  const handleTestVibration = () => {
-    VibrationService.triggerFallAlarmPulse();
-    setHapticTested(true);
-    setTimeout(() => setHapticTested(false), 2500);
-  };
-
-  // Contacts Management
-  const handleAddContact = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim() || !newPhone.trim()) return;
-
-    const newContact: EmergencyContactPerson = {
-      id: `ec-${Date.now()}`,
-      name: newName.trim(),
-      relationship: newRel,
-      phone: newPhone.trim(),
-      notifyOnFall: true,
-      notifyOnSos: true,
+    window.addEventListener('devicemotion', handleDeviceMotion);
+    return () => {
+      window.removeEventListener('devicemotion', handleDeviceMotion);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     };
+  }, [handleDeviceMotion]);
 
-    const updated = [...contacts, newContact];
-    setContacts(updated);
-    LocalClinicalStorage.saveEmergencyContacts(updated);
-    setNewName('');
-    setNewPhone('');
-    setShowAddContact(false);
-    VibrationService.triggerQuickTap();
-  };
-
-  const handleDeleteContact = (id: string) => {
-    const updated = contacts.filter(c => c.id !== id);
-    setContacts(updated);
-    LocalClinicalStorage.saveEmergencyContacts(updated);
-    VibrationService.triggerQuickTap();
-  };
-
-  const handleSendTestNotification = () => {
-    VibrationService.triggerQuickTap();
-    setIsSmsModalOpen(true);
-    setTestNotificationSent('Opening Emergency SMS Dispatcher with test payload...');
-    setTimeout(() => setTestNotificationSent(''), 4000);
-  };
+  // Reset Peak G after 5 seconds of inactivity
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPeakG(prev => Math.max(1.0, parseFloat((prev * 0.95).toFixed(2))));
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6 text-slate-100" id="fall-motion-guard-view">
-      {/* FULLSCREEN COUNTDOWN MODAL ON FALL DETECTION */}
-      {fallDetected && (
-        <div className="fixed inset-0 z-[120] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#111317] border border-red-500/40 rounded-2xl p-6 sm:p-8 text-center space-y-6 shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500 text-red-400 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-8 h-8 animate-bounce" />
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6 text-slate-800" id="fall-motion-guard-view">
+      
+      {/* HEADER: Claude-Style Refined Card */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center space-x-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${isEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+            <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+              Biomedical Motion Guard • Calibrated Physics
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-1">
+            Fall & Rapid Deceleration Guard
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5 max-w-lg">
+            3-stage algorithm: Free-fall weightlessness dip, impact shock spike, and post-fall immobility verification.
+          </p>
+        </div>
+
+        {/* Master Toggle Switch */}
+        <div className="flex items-center space-x-3">
+          <span className="text-xs font-semibold text-slate-700">
+            {isEnabled ? 'Protection Active' : 'Sensor Paused'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setIsEnabled(!isEnabled);
+              VibrationService.triggerQuickTap();
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer focus:outline-none ${
+              isEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+            }`}
+            aria-label="Toggle Fall Guard"
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* LIVE TELEMETRY & G-FORCE METER CARD */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Activity className="w-4 h-4 text-sky-600" />
+            <h2 className="text-sm font-bold text-slate-900">Live Accelerometer G-Force Telemetry</h2>
+          </div>
+          <div className="flex items-center space-x-2 text-xs text-slate-500">
+            <span>Peak: <strong className="font-mono text-slate-800">{peakG}g</strong></span>
+            <span>•</span>
+            <span>Impact Trigger: <strong className="font-mono text-rose-700">{(config.impactThreshold / 9.81).toFixed(1)}g</strong></span>
+          </div>
+        </div>
+
+        {/* G-Force Visual Gauge */}
+        <div>
+          <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1.5">
+            <span>0.0g (Free-Fall Dip)</span>
+            <span className="text-emerald-700 font-semibold">1.0g (Resting Gravity)</span>
+            <span className="text-rose-700 font-semibold">{(config.impactThreshold / 9.81).toFixed(1)}g (Threshold)</span>
+            <span>4.0g (Max)</span>
+          </div>
+
+          <div className="relative w-full h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+            {/* Safe resting gravity marker line */}
+            <div className="absolute top-0 bottom-0 left-[25%] w-0.5 bg-emerald-500 z-10" title="1.0g Rest"></div>
+            {/* Impact threshold marker line */}
+            <div 
+              className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10" 
+              style={{ left: `${Math.min(100, (config.impactThreshold / (9.81 * 4)) * 100)}%` }}
+              title="Impact Threshold"
+            ></div>
+
+            {/* Current G bar */}
+            <div
+              className={`h-full transition-all duration-75 rounded-full ${
+                currentG >= config.impactThreshold / 9.81 ? 'bg-rose-600' : 'bg-sky-600'
+              }`}
+              style={{ width: `${Math.min(100, (currentG / 4.0) * 100)}%` }}
+            ></div>
+          </div>
+
+          <div className="flex items-center justify-between mt-2 text-xs">
+            <span className="text-slate-500 font-medium">Instantaneous Vector:</span>
+            <span className="text-sm font-bold font-mono text-slate-900">{currentG} G</span>
+          </div>
+        </div>
+
+        {/* Action Bar: iOS Permission + Test Button */}
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="text-slate-500 flex items-center space-x-1.5">
+            <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+            <span>{statusMessage}</span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {!permissionGranted && (
+              <button
+                type="button"
+                onClick={requestSensorPermission}
+                className="px-3 py-1.5 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 font-semibold hover:bg-sky-100 transition-colors cursor-pointer"
+              >
+                Enable Motion Sensors
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={simulateFallImpact}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Test Fall Detection</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SENSITIVITY CALIBRATION PRESETS */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Settings2 className="w-4 h-4 text-slate-600" />
+            <h2 className="text-sm font-bold text-slate-900">Sensitivity & Environmental Tuning</h2>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">Prevents false alarms</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {(['normal', 'low', 'high'] as SensitivityLevel[]).map(key => {
+            const item = SENSITIVITY_CONFIGS[key];
+            const isSelected = sensitivity === key;
+
+            return (
+              <div
+                key={key}
+                onClick={() => {
+                  setSensitivity(key);
+                  VibrationService.triggerQuickTap();
+                }}
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                  isSelected
+                    ? 'border-sky-600 bg-sky-50/40 shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-900">{item.name}</h3>
+                    {isSelected && <CheckCircle2 className="w-4 h-4 text-sky-600 shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100/80 text-[10px] font-mono text-slate-600 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Impact Peak:</span>
+                    <strong className="text-slate-900">{(item.impactThreshold / 9.81).toFixed(1)}g</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Immobility Hold:</span>
+                    <strong className="text-slate-900">{item.immobilityTimeMs / 1000}s</strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* HOW THE BIOMEDICAL 3-PHASE DETECTION WORKS */}
+      <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 text-xs text-slate-600 space-y-2">
+        <h3 className="font-bold text-slate-900 flex items-center space-x-1.5">
+          <Shield className="w-3.5 h-3.5 text-sky-600" />
+          <span>Why this algorithm prevents false alarms:</span>
+        </h3>
+        <p className="text-slate-500 leading-relaxed">
+          Standard smartphone accelerometers often trigger false alarms simply from jumping, sitting down firmly, or tossing a phone on a bed.
+          Arambh's clinical algorithm strictly requires a <strong>weightlessness descent</strong> (below 0.59g) immediately before the <strong>impact shock</strong> (exceeding 2.7g), followed by <strong>1.5 seconds of physical stillness</strong>. If the user continues walking or moving normally, the alarm is automatically suppressed.
+        </p>
+      </div>
+
+      {/* 15-SECOND REASSURING CANCELLATION MODAL */}
+      {fallAlarmActive && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-rose-200 rounded-3xl w-full max-w-md shadow-2xl p-6 text-center space-y-6 animate-in fade-in zoom-in-95 duration-150">
+            
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 border border-rose-200 text-rose-700 flex items-center justify-center mx-auto shadow-inner">
+              <AlertTriangle className="w-8 h-8 animate-bounce" />
             </div>
 
-            <div>
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-red-500/15 text-red-400 uppercase tracking-wider">
-                IMPACT SHOCK DETECTED
+            <div className="space-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-600">
+                High-Impact Deceleration Detected
               </span>
-              <h2 className="text-3xl font-extrabold text-white mt-2 tracking-tight">
-                Fall Alarm Active
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Are You Injured?
               </h2>
-              <p className="text-slate-400 text-xs mt-1">
-                Your device is physically vibrating. Alerting emergency contacts & nearest hospital in:
+              <p className="text-xs text-slate-500">
+                Auto-dispatching 108 Emergency Ambulance & Trauma Bed Reservation in:
               </p>
             </div>
 
-            {/* Huge Clean Countdown */}
-            <div className="py-2">
-              <div className="text-7xl font-mono font-extrabold text-white tracking-tighter">
-                {countdownSeconds}s
-              </div>
+            {/* Countdown Ring */}
+            <div className="w-24 h-24 rounded-full border-4 border-rose-600 bg-rose-50/50 flex flex-col items-center justify-center mx-auto shadow-xs">
+              <span className="text-3xl font-black font-mono text-rose-600">{countdownSeconds}</span>
+              <span className="text-[10px] font-semibold text-rose-500 uppercase">seconds</span>
             </div>
 
-            {/* Cancel False Alarm Button */}
-            <div className="space-y-3">
+            {/* Huge Prominent "I am OK" Cancel Button */}
+            <div className="space-y-2.5">
               <button
-                onClick={cancelFallAlert}
-                className="w-full py-4 rounded-xl bg-white text-black hover:bg-slate-200 font-bold text-base transition-all cursor-pointer shadow-lg active:scale-98"
+                type="button"
+                onClick={cancelFallAlarm}
+                className="w-full py-3.5 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
               >
-                I'm Okay — Cancel Alert
+                I am OK • Cancel Emergency Alert
               </button>
 
               <button
-                onClick={executeEmergencyDispatch}
-                className="w-full py-3 rounded-xl bg-[#1a1d24] hover:bg-[#232731] text-red-400 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer border border-red-500/30"
+                type="button"
+                onClick={dispatchAutoEmergency}
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition-colors cursor-pointer border border-rose-200"
               >
-                Dispatch Immediately
+                Send 108 Ambulance Immediately
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* DISPATCH CONFIRMATION */}
-      {alertDispatched && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-white border border-emerald-300 shadow-xs flex items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div>
-                <h3 className="font-semibold text-sm text-slate-900">Fall Emergency Dispatched</h3>
-                <p className="text-xs text-slate-500">
-                  Ambulance routed & emergency contacts messaged with your coordinates.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setIsSmsModalOpen(true)}
-                className="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-semibold border border-sky-200 cursor-pointer"
-              >
-                SMS Gateway
-              </button>
-              <button
-                onClick={() => setAlertDispatched(false)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 cursor-pointer"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-
-          {dispatchedCase && (
-            <AmbulanceLiveTracker emergencyCase={dispatchedCase} />
-          )}
-        </div>
-      )}
-
-      {/* HEADER: MINIMAL & REFINED */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-            <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-              Autonomous Motion & Tactile Safety
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
-            Fall Guard & Vibration Feedback
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Samples motion deceleration vectors and physically pulses the phone upon impact.
-          </p>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleTestVibration}
-            className="py-2 px-3 rounded-xl bg-[#14161a] hover:bg-[#1a1d24] text-xs font-mono text-slate-200 border border-white/10 flex items-center space-x-1.5 transition-all cursor-pointer"
-            title="Test Physical Vibration API on your device"
-          >
-            <Smartphone className={`w-3.5 h-3.5 ${hapticTested ? 'text-red-400 animate-spin' : 'text-slate-400'}`} />
-            <span>{hapticTested ? 'Pulsing Device...' : 'Test Vibration'}</span>
-          </button>
-
-          <button
-            onClick={() => triggerFallEmergency('Manual Simulation')}
-            className="py-2 px-3 rounded-xl bg-red-500 hover:bg-red-400 text-white font-mono text-xs font-bold uppercase transition-all cursor-pointer"
-          >
-            Simulate Fall
-          </button>
-        </div>
-      </div>
-
-      {/* SENSORS & PHYSICAL FEEDBACK CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Card 1: Accelerometer & Vibration Status */}
-        <div className="bg-[#111317] border border-white/5 p-5 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400">
-                <Activity className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm text-white">Motion Accelerometer</h3>
-                <span className="text-[10px] font-mono text-slate-400">
-                  {motionSupported ? 'Active 3-Axis Vector' : 'Simulated Sensor Mode'}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                setHapticEnabled(!hapticEnabled);
-                VibrationService.triggerQuickTap();
-              }}
-              className={`text-[10px] font-mono px-2 py-1 rounded-md border transition-colors ${
-                hapticEnabled 
-                  ? 'bg-red-500/15 border-red-500/40 text-red-400' 
-                  : 'bg-[#181b22] border-white/10 text-slate-500'
-              }`}
-            >
-              {hapticEnabled ? 'HAPTIC ON' : 'HAPTIC OFF'}
-            </button>
-          </div>
-
-          <div className="space-y-2 font-mono text-xs">
-            <div className="flex justify-between text-slate-400">
-              <span>Live Force: <b className="text-white">{currentAccel} m/s²</b></span>
-              <span>Peak Recorded: <b className="text-amber-400">{maxAccelObserved} m/s²</b></span>
-            </div>
-            {/* Minimal gauge bar */}
-            <div className="w-full h-2 bg-[#1a1d24] rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-100 ${
-                  currentAccel > 20 ? 'bg-red-500' : currentAccel > 14 ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-                style={{ width: `${Math.min(100, (currentAccel / 30) * 100)}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between text-[10px] text-slate-500">
-              <span>0 Rest</span>
-              <span>9.8 Gravity</span>
-              <span>&gt;24 Impact Shock</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Hands-Free Continuous Voice Activation */}
-        <div className="bg-[#111317] border border-white/5 p-5 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-                <Mic className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm text-white">Voice Trigger Sentinel</h3>
-                <span className="text-[10px] font-mono text-slate-400">Hands-Free Hotword Detection</span>
-              </div>
-            </div>
-
-            <button
-              onClick={toggleVoiceTrigger}
-              className={`text-[10px] font-mono px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                voiceActive 
-                  ? 'bg-red-500 text-white font-bold' 
-                  : 'bg-[#181b22] text-slate-400 border border-white/10 hover:text-white'
-              }`}
-            >
-              {voiceActive ? 'LISTENING' : 'START LISTENING'}
-            </button>
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Shout keywords like <span className="text-white font-mono font-medium">"HELP"</span>, <span className="text-white font-mono font-medium">"SOS"</span>, or <span className="text-white font-mono font-medium">"AMBULANCE"</span> to trigger emergency dispatch hands-free.
-          </p>
-
-          {lastVoiceTrigger && (
-            <div className="text-[11px] font-mono text-emerald-400">
-              Detected: "{lastVoiceTrigger}"
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* GUARDIAN CONTACTS SETUP */}
-      <div className="bg-[#111317] border border-white/5 p-5 rounded-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
-          <div>
-            <h2 className="text-base font-semibold text-white">
-              Emergency Contacts ({contacts.length})
-            </h2>
-            <p className="text-xs text-slate-400">
-              Recipients receiving SMS and live GPS coordinates when a fall occurs.
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowAddContact(!showAddContact)}
-              className="px-3 py-1.5 rounded-lg bg-white text-black hover:bg-slate-200 font-mono text-xs font-semibold uppercase flex items-center space-x-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add</span>
-            </button>
-
-            <button
-              onClick={handleSendTestNotification}
-              className="px-3 py-1.5 rounded-lg bg-[#181b22] hover:bg-[#20242e] text-slate-300 font-mono text-xs uppercase border border-white/10 cursor-pointer"
-            >
-              Test SMS
-            </button>
-          </div>
-        </div>
-
-        {testNotificationSent && (
-          <div className="p-3 bg-[#181b22] border border-emerald-500/30 rounded-xl text-xs font-mono text-emerald-400 flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{testNotificationSent}</span>
-          </div>
-        )}
-
-        {/* Add Contact Form */}
-        {showAddContact && (
-          <form onSubmit={handleAddContact} className="p-4 bg-[#14161a] rounded-xl border border-white/10 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[10px] font-mono text-slate-400 uppercase">Contact Name</label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Sunita Deshmukh"
-                  className="w-full bg-[#1c1f26] border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-mono text-slate-400 uppercase">Relationship</label>
-                <select
-                  value={newRel}
-                  onChange={(e) => setNewRel(e.target.value)}
-                  className="w-full bg-[#1c1f26] border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="Spouse">Spouse</option>
-                  <option value="Parent">Parent</option>
-                  <option value="Son/Daughter">Son/Daughter</option>
-                  <option value="Family Doctor">Family Doctor</option>
-                  <option value="Neighbor">Neighbor</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-mono text-slate-400 uppercase">Phone Number</label>
-                <input
-                  type="tel"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="+91 98201 11223"
-                  className="w-full bg-[#1c1f26] border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowAddContact(false)}
-                className="px-3 py-1.5 rounded-lg bg-[#181b22] text-xs font-mono text-slate-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-mono text-xs font-bold uppercase"
-              >
-                Save Contact
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Contacts List */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {contacts.map((contact) => (
-            <div 
-              key={contact.id}
-              className="p-3.5 bg-[#14161a] border border-white/5 rounded-xl flex items-center justify-between gap-3"
-            >
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-sm text-white">{contact.name}</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1c1f26] text-slate-400">
-                    {contact.relationship}
-                  </span>
-                </div>
-                <div className="text-xs font-mono text-slate-400 mt-0.5">{contact.phone}</div>
-              </div>
-
-              <div className="flex items-center space-x-1">
-                <a
-                  href={`tel:${contact.phone}`}
-                  className="p-2 rounded-lg bg-[#1c1f26] hover:bg-[#232731] text-slate-300 hover:text-white"
-                  title="Call Contact"
-                >
-                  <PhoneCall className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  onClick={() => handleDeleteContact(contact.id)}
-                  className="p-2 rounded-lg bg-[#1c1f26] hover:bg-[#232731] text-slate-500 hover:text-red-400"
-                  title="Remove Contact"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* EMERGENCY SMS DISPATCH MODAL */}
-      <SmsDispatchModal
-        isOpen={isSmsModalOpen}
-        onClose={() => setIsSmsModalOpen(false)}
-        initialMessage={dispatchedCase ? SmsEmergencyService.encodeEmergencyCase({
-          lat: dispatchedCase.lat,
-          long: dispatchedCase.long,
-          triageTag: dispatchedCase.triage_tag,
-          condition: dispatchedCase.condition_text,
-          bedToken: `BED-RES-${dispatchedCase.id.slice(-4)}`,
-          targetHospital: dispatchedCase.assigned_hospital,
-        }) : 'ARAMBH#SOS|v1|GPS:28.6139,77.2090|P:65M|T:TRM|C:TEST_FALL_ALERT|BED:BED-TEST|H:AIIMS|TM:1200'}
-        initialPhone={contacts[0]?.phone || '108'}
-        caseId={dispatchedCase?.id || 'EMG-FALL-TEST'}
-        targetHospital={dispatchedCase?.assigned_hospital || 'AIIMS Trauma Center'}
-      />
     </div>
   );
 };

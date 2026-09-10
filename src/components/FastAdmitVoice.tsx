@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, PhoneCall, Zap, MapPin, AlertTriangle, ShieldCheck, 
   Heart, Activity, CheckCircle2, Clock, Navigation, Volume2, VolumeX, 
-  ArrowRight, Stethoscope, RefreshCw, Radio, UserCheck, ShieldAlert
+  ArrowRight, Stethoscope, RefreshCw, Radio, UserCheck, ShieldAlert, Bot
 } from 'lucide-react';
 import { EmergencyCase, HospitalEvaluation, TriageTag } from '../types';
 import { rankAllHospitals, nearestHospital } from '../services/geo';
@@ -19,14 +19,14 @@ import { SmsDispatchModal } from './SmsDispatchModal';
 interface FastAdmitVoiceProps {
   isOfflineMode: boolean;
   onCaseCreated?: (newCase: EmergencyCase) => void;
-  onOpenReceptionist?: (hospitalName: string, caseData?: EmergencyCase) => void;
+  onOpenAiAssistant?: () => void;
   onViewHospitals?: () => void;
 }
 
 export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
   isOfflineMode,
   onCaseCreated,
-  onOpenReceptionist,
+  onOpenAiAssistant,
   onViewHospitals,
 }) => {
   // Voice input state
@@ -324,18 +324,24 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2.5 pt-1">
-            <button
-              onClick={() => onOpenReceptionist && onOpenReceptionist(admitSuccessCase.assigned_hospital, admitSuccessCase)}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
-            >
-              <PhoneCall className="w-4 h-4" />
-              <span>Talk to Virtual Receptionist</span>
-            </button>
+            {onOpenAiAssistant && (
+              <button
+                type="button"
+                onClick={() => {
+                  VibrationService.triggerQuickTap();
+                  onOpenAiAssistant();
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+              >
+                <Bot className="w-4 h-4" />
+                <span>Consult AI Emergency Protocols</span>
+              </button>
+            )}
             <a
-              href={`tel:${admitSuccessCase.ambulance_phone}`}
-              className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center space-x-2 border border-slate-200 cursor-pointer transition-colors"
+              href={`tel:${admitSuccessCase.ambulance_phone || '108'}`}
+              className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs flex items-center justify-center space-x-2 border border-slate-200 cursor-pointer transition-colors"
             >
-              <span>Direct Hotline ({admitSuccessCase.ambulance_phone})</span>
+              <span>Call Paramedic ({admitSuccessCase.ambulance_phone || '108'})</span>
             </a>
             <button
               type="button"
@@ -348,13 +354,29 @@ export const FastAdmitVoice: React.FC<FastAdmitVoiceProps> = ({
               <MessageSquare className="w-4 h-4 text-rose-600" />
               <span>Dispatch SMS (108)</span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                VibrationService.triggerQuickTap();
+                setAdmitSuccessCase(null);
+                setConditionText('');
+                setTranscript('');
+              }}
+              className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs flex items-center justify-center space-x-1 border border-slate-200 cursor-pointer transition-colors"
+              title="Reset and file new case"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>New SOS</span>
+            </button>
           </div>
 
           {/* LIVE AMBULANCE DELIVERY APP TRACKER */}
           <div className="pt-2">
             <AmbulanceLiveTracker 
               emergencyCase={admitSuccessCase} 
-              onCallAmbulance={() => {}}
+              onCallAmbulance={() => {
+                window.location.href = `tel:${admitSuccessCase.ambulance_phone || '108'}`;
+              }}
             />
           </div>
         </div>
