@@ -156,24 +156,29 @@ export const SmsDispatchModal: React.FC<SmsDispatchModalProps> = ({
 
         <div className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
 
-          {/* CRUCIAL USER HELP: WHY 108 SAYS CARRIER CHARGES */}
-          <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900">
+          {/* CRUCIAL USER HELP: WHY 108 SAYS CARRIER CHARGES OR PREMIUM SMS FAILED */}
+          <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900">
             <div className="flex items-start space-x-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
+              <div className="space-y-1">
                 <strong className="font-bold text-amber-950 block">
-                  Why does SMS to "108" say "Carrier charges may apply" or fail?
+                  Seeing "Premium SMS Failed" or "Carrier charges" on Android?
                 </strong>
-                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                  In India, <strong>108 is a Voice Helpline</strong>. Telecom operators (Jio, Airtel, Vi) treat 3-digit SMS as premium shortcodes and may warn of charges or reject text messages.
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Android classifies 3-digit numbers (like <strong>108</strong>) as potential premium shortcodes and blocks text messages by default. In India, 108 is also primarily a <strong>Voice Call Helpline</strong>.
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="p-2 rounded-lg bg-amber-100/70 border border-amber-200 text-[10.5px] text-amber-950 space-y-0.5">
+                  <p><strong>Option 1 (Instant):</strong> Tap <strong>10-Digit Gateway (+91 98201 10811)</strong> below — standard 10-digit numbers are never blocked by Android.</p>
+                  <p><strong>Option 2 (One-Time Fix):</strong> On the Android "Premium SMS Failed" popup, tap <strong>Settings → Special app access → Premium SMS access → Always allow</strong>.</p>
+                  <p><strong>Option 3 (Voice):</strong> Emergency voice calls to 108 are 100% free and have zero SMS restrictions.</p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 pt-0.5">
                   <a
                     href="tel:108"
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
                   >
                     <Phone className="w-3.5 h-3.5" />
-                    <span>Free Voice Call 108 (Toll-Free, 0 Charges)</span>
+                    <span>Free Voice Call 108 (Toll-Free)</span>
                   </a>
                   <button
                     type="button"
@@ -181,7 +186,7 @@ export const SmsDispatchModal: React.FC<SmsDispatchModalProps> = ({
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Send Free via WhatsApp (No SMS Fees)</span>
+                    <span>Send via WhatsApp (Free)</span>
                   </button>
                 </div>
               </div>

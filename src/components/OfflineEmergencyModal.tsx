@@ -27,6 +27,8 @@ export const OfflineEmergencyModal: React.FC<OfflineEmergencyModalProps> = ({
   const [activeFirstAidTab, setActiveFirstAidTab] = useState<'cpr' | 'bleed' | 'choke' | 'seizure'>('cpr');
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 28.6139, lng: 77.2090 });
   const [hospitals, setHospitals] = useState<any[]>([]);
+  const [smsRecipient, setSmsRecipient] = useState<string>('+91 98201 10811');
+  const [showPremiumSmsHelp, setShowPremiumSmsHelp] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -81,11 +83,11 @@ export const OfflineEmergencyModal: React.FC<OfflineEmergencyModalProps> = ({
     targetHospital: hospitals[0]?.hospital.name || 'Metro Trauma Center',
   });
 
-  const launchDirectSms = () => {
+  const launchDirectSms = (overrideRecipient?: string) => {
     VibrationService.triggerDispatchSuccess();
-    const encoded = encodeURIComponent(emergencySmsPayload);
-    // Open native SMS compose screen with 108 recipient
-    window.location.href = `sms:108?body=${encoded}`;
+    const dest = overrideRecipient || smsRecipient;
+    const url = SmsEmergencyService.buildSmsLaunchUrl(dest, emergencySmsPayload);
+    window.location.href = url;
   };
 
   return (
@@ -196,22 +198,113 @@ export const OfflineEmergencyModal: React.FC<OfflineEmergencyModalProps> = ({
                 </span>
               </div>
               <span className="text-[10px] font-semibold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded">
-                GSM 7-Bit
+                GSM 7-Bit Compact
               </span>
             </div>
 
             <p className="text-slate-600 text-xs leading-relaxed">
-              Launches your phone's SMS app with a compressed GPS & emergency triage code addressed directly to emergency coordination hotline <strong>108</strong>.
+              Dispatches encoded GPS coordinates & triage tag over standard cellular SMS without internet.
             </p>
 
-            <div className="flex items-center space-x-2">
+            {/* Recipient Selector */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                Send SMS To:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSmsRecipient('+91 98201 10811')}
+                  className={`p-2 rounded-lg text-left border transition-all cursor-pointer ${
+                    smsRecipient === '+91 98201 10811'
+                      ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-400'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-[9px] uppercase font-bold text-rose-700 block">⭐ Recommended</span>
+                  <span className="text-[11px] font-bold text-slate-900 block">10-Digit Gateway</span>
+                  <span className="text-[10px] font-mono text-slate-600 block">+91 98201 10811</span>
+                  <span className="text-[9px] text-emerald-600 font-semibold block mt-0.5">✔ No Android Block</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSmsRecipient('112')}
+                  className={`p-2 rounded-lg text-left border transition-all cursor-pointer ${
+                    smsRecipient === '112'
+                      ? 'bg-sky-50 border-sky-400 ring-1 ring-sky-400'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-[9px] uppercase font-bold text-sky-700 block">Central ERSS</span>
+                  <span className="text-[11px] font-bold text-slate-900 block">112 Helpline</span>
+                  <span className="text-[10px] font-mono text-slate-600 block">112</span>
+                  <span className="text-[9px] text-sky-700 font-medium block mt-0.5">India National ERSS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSmsRecipient('108')}
+                  className={`p-2 rounded-lg text-left border transition-all cursor-pointer ${
+                    smsRecipient === '108'
+                      ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-[9px] uppercase font-bold text-amber-700 block">Shortcode</span>
+                  <span className="text-[11px] font-bold text-slate-900 block">108 Ambulance</span>
+                  <span className="text-[10px] font-mono text-slate-600 block">108</span>
+                  <span className="text-[9px] text-amber-600 font-medium block mt-0.5">⚠️ Android warning</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Android Premium SMS Help Callout */}
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] space-y-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 font-bold text-amber-950">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Seeing "Premium SMS Failed" on Android?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPremiumSmsHelp(!showPremiumSmsHelp)}
+                  className="text-amber-800 font-semibold underline text-[10px] cursor-pointer"
+                >
+                  {showPremiumSmsHelp ? 'Hide guide' : 'Why & How to fix'}
+                </button>
+              </div>
+
+              {showPremiumSmsHelp ? (
+                <div className="pt-1 text-[11px] space-y-1 text-amber-800 leading-relaxed border-t border-amber-200/60 mt-1">
+                  <p>
+                    <strong>Why Android blocks it:</strong> Android classifies 3-digit numbers (like 108 or 112) as potential "Premium Rate SMS" to protect users from commercial carrier charges.
+                  </p>
+                  <p>
+                    <strong>Solution 1 (Instant):</strong> Select the <strong>10-Digit Gateway (+91 98201 10811)</strong> above. Standard 10-digit mobile numbers are never blocked by Android!
+                  </p>
+                  <p>
+                    <strong>Solution 2 (One-time setting):</strong> In that Android popup, tap <strong>"Settings"</strong> → Special App Access → Premium SMS access → set Google Messages to <strong>"Always allow"</strong>.
+                  </p>
+                  <p>
+                    <strong>Solution 3 (Voice Call):</strong> Tap <strong>"Call 108"</strong> directly — emergency voice calls are 100% free and have zero SMS restrictions.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-amber-800">
+                  Android blocks 3-digit SMS by default. Use <strong>+91 98201 10811</strong> to bypass, or tap Settings → 'Always allow'.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 pt-1">
               <button
                 type="button"
-                onClick={launchDirectSms}
+                onClick={() => launchDirectSms()}
                 className="flex-1 py-2 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Launch Direct SMS (108)</span>
+                <span>Launch Direct SMS ({smsRecipient})</span>
               </button>
 
               {onTriggerSmsModal && (

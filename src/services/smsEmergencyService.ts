@@ -35,7 +35,10 @@ export interface SmsDispatchResult {
 
 export class SmsEmergencyService {
   // Primary Indian Emergency Hotlines
-  public static readonly DEFAULT_EMERGENCY_SMS_NUMBER = '108'; // National Ambulance / Emergency Medical Hotline
+  // We default to the 10-digit Trauma Coordination Cell to bypass Android OS "Premium SMS Failed" shortcode block
+  public static readonly DEFAULT_EMERGENCY_SMS_NUMBER = '+91 98201 10811'; // 10-digit Emergency Cellular Gateway (Bypasses Android Premium SMS block)
+  public static readonly EMERGENCY_VOICE_HOTLINE_108 = '108'; // National Ambulance Voice Hotline (100% Free Toll-Free Call)
+  public static readonly EMERGENCY_ERSS_112 = '112'; // National Emergency Response Support System (ERSS)
   public static readonly TRAUMA_COORDINATION_CELL = '+91 98201 10811';
 
   /**
